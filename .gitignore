@@ -1,0 +1,54 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Wiki runtime state (generated; personal; not for version control)
+wiki/.index-dirty
+wiki/memory/*
+!wiki/memory/MEMORY.md
+wiki/log.md
+
+# Content directories — keep the README.md placeholders but ignore real content
+# (users populate these themselves after cloning)
+raw/*.md
+!raw/README.md
+raw_processed/*.md
+!raw_processed/README.md
+other_sources/*.md
+!other_sources/README.md
+
+# Wiki pages — starter kit ships with zero pages; users author their own
+wiki/pages/**/*.md
+
+# Pending research briefs — user-specific (but ship the registry stub the boot sequence reads)
+wiki/pending_research/*.md
+!wiki/pending_research/README.md
+!wiki/pending_research/_index.md
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Obsidian vault config (personal)
+.obsidian/
+
+# Logs
+*.log
+
+# Blog drafts (personal; not part of the public template)
+blog/
