@@ -17,9 +17,10 @@ A living, grounded SAP knowledge base powered by a team of specialised AI agents
 9. [The Guardrail System](#9-the-guardrail-system)
 10. [The AI Harness](#10-the-ai-harness)
 11. [The Scripts Engine](#11-the-scripts-engine)
-12. [Folder Structure](#12-folder-structure)
-13. [Command Reference](#13-command-reference)
-14. [Getting Started](#14-getting-started)
+12. [Integrations](#12-integrations)
+13. [Folder Structure](#13-folder-structure)
+14. [Command Reference](#14-command-reference)
+15. [Getting Started](#15-getting-started)
 
 ---
 
@@ -274,7 +275,7 @@ Kylie deletes the original from `other_sources/` after verifying all splits are 
 
 **Wiki write-back duty:** every Paul hand-off includes a `## Write-back requests` section: newly-verified facts (a real signature, a real table structure) get relayed back through Alex to Anja, so the next task cites them from the wiki instead of re-running live introspection.
 
-**You interact with Paul using:** describe the ABAP/RAP/CAP object you want built or reviewed and dispatch him via the Agent tool (see Section 13's Development commands for the one formally documented shorthand, `@paul scan [object]`, used for a TDD-conformance review of code that already exists).
+**You interact with Paul using:** describe the ABAP/RAP/CAP object you want built or reviewed and dispatch him via the Agent tool (see Section 14's Development commands for the one formally documented shorthand, `@paul scan [object]`, used for a TDD-conformance review of code that already exists).
 
 ---
 
@@ -747,7 +748,43 @@ The wiki is maintained by a set of Python scripts. These are the automated backb
 
 ---
 
-## 12. Folder Structure
+## 12. Integrations
+
+Two optional integrations extend the wiki beyond the terminal. Neither is required for the core system (ingestion, query, curation) to work; both live in `integrations/` and ship as sanitised templates you fill in locally.
+
+### Eclipse plug-in: Claude Code for ABAP
+
+A Joule-style Claude Code chat panel docked inside Eclipse/ADT, built as Paul's live write path for ABAP and RAP. It wires a real Claude Agent SDK session to SAP's embedded ADT MCP Server (ATC, unit tests, activation, transport diff) and adds an editor bridge so Claude can read and edit the ABAP source in your open ADT editors directly: no copy-paste, edits appear live in the buffer, are undoable with Cmd+Z, and save/activate through ADT's own pipeline.
+
+**Requirements:** Eclipse 2026-06 with ABAP Development Tools 3.60+ and the ADT MCP Server enabled; Node.js 20+; an authenticated Claude Code CLI session (`~/.claude`); JDK 21 and Maven, only if building from source.
+
+**Security model:** fail-closed on a Dev-only project allowlist, so source read/write is refused unless the open editor resolves to an allowlisted Dev ABAP project; exactly three bridge tools (`read_source`, `write_source`, `get_editor_context`); the ADT MCP bearer token stays in workspace preferences and reaches the sidecar via environment variables only, never on the command line, in logs, or in the UI; the chat UI binds to `127.0.0.1` with a per-launch token; and there is no direct ADT REST access, so all persistence and activation route through ADT's own save pipeline.
+
+**Setup, in short:** build the update-site zip with `mvn clean verify` (or use a prebuilt one), install it via Eclipse's Install New Software wizard, then set your Dev system allowlist under Preferences → Claude Code for ABAP. Full build, install, configuration, and troubleshooting steps: [`integrations/claude-code-eclipse/README.md`](integrations/claude-code-eclipse/README.md). Governance and design rationale: [`docs/ADR-002-eclipse-editor-bridge.md`](integrations/claude-code-eclipse/docs/ADR-002-eclipse-editor-bridge.md).
+
+### n8n: WhatsApp to Alex
+
+A reference n8n workflow that lets you query the wiki from WhatsApp: send a message, get a grounded, cited answer back from Alex. n8n cannot run the wiki engine directly, so it reaches the machine where the wiki and Claude Code live over SSH and runs Claude Code headless (`claude -p "@alex ask ..."`), which boots the full constitution and guardrails exactly as an interactive session would.
+
+```
+WhatsApp message
+  -> POST webhook
+  -> Fetch Sender        (parse the text and the sender)
+  -> "Working, please wait..."   (WhatsApp send, so there is no silence)
+  -> Call Alex           (SSH: unlock keychain, then claude -p "@alex ask ...")
+  -> Prep Response       (extract the answer between <<<A>>> and <<<Z>>>)
+  -> Reply               (WhatsApp send)
+```
+
+**Requirements:** a self-hosted n8n instance; a host running the wiki and Claude Code (signed in), with Remote Login (SSH) enabled and kept powered on; a Meta WhatsApp Cloud API app with a WhatsApp Business Account; a public HTTPS endpoint for the webhook.
+
+**Setup, in short:** import `ask-alex.workflow.json`, replace the placeholders (SSH credential and paths, WhatsApp phone number ID and credential), point your Meta webhook at the n8n webhook URL, subscribe the app to your WABA, and use a permanent System-User token rather than a 24-hour test token.
+
+Do not use the official WhatsApp Trigger node: it answers Meta's verification with a generic acknowledgement rather than echoing `hub.challenge`, so verification never passes. This template uses two plain webhook nodes instead. Full setup steps and every hard-won gotcha: [`integrations/n8n/README.md`](integrations/n8n/README.md).
+
+---
+
+## 13. Folder Structure
 
 ```
 LLM Wiki/
@@ -861,7 +898,7 @@ LLM Wiki/
 
 ---
 
-## 13. Command Reference
+## 14. Command Reference
 
 ### Ingestion commands
 
@@ -912,7 +949,7 @@ LLM Wiki/
 
 ---
 
-## 14. Getting Started
+## 15. Getting Started
 
 ### Prerequisites
 
