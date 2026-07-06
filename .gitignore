@@ -16,7 +16,8 @@ build/
 venv/
 
 # Wiki runtime state (generated; personal; not for version control)
-wiki/.index-dirty
+wiki/.index-dirty*
+wiki/.locks/
 wiki/memory/*
 !wiki/memory/MEMORY.md
 wiki/log.md
@@ -24,6 +25,18 @@ wiki/log.md
 # Personalisation & learning layer (confidential; user-specific — never version-controlled)
 wiki/profile/
 wiki/agents/lessons/
+
+# Public-mirror exclusions (SOP: wiki/operations.md) — confidential or session-local;
+# their owning scripts self-create these on demand (mkdir(parents=True, exist_ok=True))
+.mcp.json
+wiki/clusters/client-dev-context.md
+wiki/pending/proposals/
+wiki/pending/cross-links-inbox/
+wiki/archive/
+wiki/pending/handoff.md
+wiki/pending/health-history.md
+wiki/pending/ingest-queue.md
+wiki/pending/maintenance-sweep.md
 
 # Content directories — keep the README.md placeholders but ignore real content
 # (users populate these themselves after cloning)
@@ -41,6 +54,10 @@ wiki/pages/**/*.md
 wiki/pending_research/*.md
 !wiki/pending_research/README.md
 !wiki/pending_research/_index.md
+
+# Resolved-research archive — same placeholder convention as raw/raw_processed/other_sources
+wiki/pending_research/_resolved/*.md
+!wiki/pending_research/_resolved/README.md
 
 # Editor / IDE
 .vscode/

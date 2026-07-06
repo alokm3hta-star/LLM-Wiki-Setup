@@ -18,7 +18,7 @@ The eleven domain clusters below ship pre-defined but empty. Entity counts and P
 | integration-cloud-integration | SAP Integration Suite — Cloud Integration: iFlows, adapters, mappings, EIP, Edge Integration Cell, data integration (SDI/SDQ, SLT), Data Space | 0 | `clusters/integration-cloud-integration.md` | — |
 | integration-api-management | SAP Integration Suite — API Management: proxies, policies, products, Developer Hub, Graph | 0 | `clusters/integration-api-management.md` | — |
 | integration-suite-core | SAP Integration Suite cross-cutting: provisioning, ISA-M, overview, B2B (Integration Advisor + TPM), Event Mesh, AIF error handling, IAM, Migration Assessment | 0 | `clusters/integration-suite-core.md` | — |
-| ilm              | SAP Information Lifecycle Management — archiving, GDPR, data destruction, retention warehouse | 0 | `clusters/ilm.md` | — |
+| ilm              | SAP Information Lifecycle Management — archiving, data privacy, data destruction, retention warehouse | 0 | `clusters/ilm.md` | — |
 | cloud-alm        | SAP Cloud ALM — project management, test management, change management, operations monitoring | 0 | `clusters/cloud-alm.md` | — |
 | s4hana-lifecycle | S/4HANA implementation methodology, ACTIVATE framework, Situation Handling, migration tooling | 0 | `clusters/s4hana-lifecycle.md` | — |
 | btp-platform     | SAP BTP platform services: Kyma, CF, security, identity, Work Zone, BAS, datasphere, IAG, ETD | 0 | `clusters/btp-platform.md` | — |

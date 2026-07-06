@@ -255,12 +255,12 @@ Kylie:
 @anja ingest raw/sap-ilm-help-01.md to cluster ilm
 ```
 
-Anja reads the part, identifies concept boundaries (Archiving Objects, ILM Store, GDPR-relevant data deletion, etc.), and writes structured pages:
+Anja reads the part, identifies concept boundaries (Archiving Objects, ILM Store, privacy-driven data deletion, etc.), and writes structured pages:
 
 ```
 wiki/pages/ilm/ilm-archiving-objects-overview.md
 wiki/pages/ilm/ilm-store-configuration.md
-wiki/pages/ilm/ilm-gdpr-data-destruction.md
+wiki/pages/ilm/ilm-data-destruction.md
 ...
 ```
 
@@ -269,7 +269,7 @@ Each page has this structure:
 ---
 cluster: ilm
 aliases: ["ILM Store Configuration", "SAP ILM Store Setup", "how to configure ILM Store"]
-keywords: [ilm, store, configuration, retention, archiving, gdpr, worm, warehouse]
+keywords: [ilm, store, configuration, retention, archiving, privacy, worm, warehouse]
 tags: [ilm]
 summary: "ILM Store connects to certified WORM storage via ILM Object Store API..."
 entities: ["IRMPAC", "SARE", "IF_ARCH_RAW_DATA_PROVIDER"]
@@ -327,7 +327,7 @@ The wiki is organised into 12 clusters. Each cluster covers a distinct SAP domai
 | `integration-cloud-integration` | SAP Integration Suite, Cloud Integration: iFlows, adapters (JMS, FTP, IDoc, JDBC, RFC, HTTP), mappings, EIP patterns, Edge Integration Cell |
 | `integration-api-management` | SAP Integration Suite, API Management: proxies, policies (KVM, OAuth, CSRF, threat analytics), Developer Hub, Graph |
 | `integration-suite-core` | SAP Integration Suite cross-cutting: provisioning, ISA-M methodology, B2B/Integration Advisor, Event Mesh, Migration Assessment |
-| `ilm` | SAP Information Lifecycle Management: data archiving, GDPR/data destruction, ILM Store, retention warehouse |
+| `ilm` | SAP Information Lifecycle Management: data archiving, privacy-driven data destruction, ILM Store, retention warehouse |
 | `s4hana-lifecycle` | S/4HANA implementation: ACTIVATE methodology, Situation Handling, system conversion (DMO/SUM), migration tooling, output management |
 | `cloud-alm` | SAP Cloud ALM: project management, test management, change management, operations monitoring |
 | `cap-dev` | SAP Cloud Application Programming Model (CAP): Node.js/Java services, OData, multitenancy |

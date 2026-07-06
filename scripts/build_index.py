@@ -103,6 +103,7 @@ def main():
     dry_run = "--dry-run" in sys.argv
     write_counts = "--no-counts" not in sys.argv
 
+    PAGES.mkdir(parents=True, exist_ok=True)
     page_files = sorted(PAGES.rglob("*.md"))
     # exclude dotfile dirs (e.g. .obsidian) so they don't count as a cluster
     cluster_names = {p.name for p in PAGES.iterdir() if p.is_dir() and not p.name.startswith(".")}
