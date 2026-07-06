@@ -204,6 +204,12 @@ name a specific commercial publisher or cite a book/chapter/part in illustrative
 documentation-style rule (avoid inviting the next sync to reintroduce a specific name as "just an example"),
 separate from the registry-reset rule above, which is about real accumulated data.
 
+**No em-dashes or en-dashes in shipped documentation.** CLAUDE.md's style rule (use semicolons, colons, or
+new sentences instead) applies to every file the mirror ships, not just README.md: this operations file,
+schema.md, agent specs, anything a sync writes or edits. Sweep before every sync with
+`git grep -n '—\|–' -- '*.md'`; treat any hit inside text this sync is writing or editing as a fix-before-push
+item. Pre-existing hits in untouched content are a separate, larger cleanup, not a per-sync blocker.
+
 ## Paul write-back flow
 
 Every Paul hand-off carries a mandatory `## Write-back requests` section (see `wiki/agents/paul-dev.md` →
