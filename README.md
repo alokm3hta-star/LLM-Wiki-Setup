@@ -99,7 +99,7 @@ You have a document
 
 Every step is automated. Every agent hands off to the next. You interact mainly at the top (dropping in documents) and at the bottom (asking questions). Everything in between runs itself.
 
-That covers the knowledge track. A second track runs in parallel for delivery — Paul reads the same `wiki/lookup.md` for grounding, but writes code, not pages, and never touches `wiki/pages/`:
+That covers the knowledge track. A second track runs in parallel for delivery: Paul reads the same `wiki/lookup.md` for grounding, but writes code, not pages, and never touches `wiki/pages/`.
 
 ```
 ┌───────────────┐
@@ -128,7 +128,7 @@ That covers the knowledge track. A second track runs in parallel for delivery �
 └────────────────────────────────────────────┘
 ```
 
-The two tracks share only the wiki: the knowledge track writes it, Paul reads it, and Paul's write-backs are the one bridge back into the knowledge track — routed through Alex and Anja like any other source, never written by Paul directly.
+The two tracks share only the wiki: the knowledge track writes it, Paul reads it, and Paul's write-backs are the one bridge back into the knowledge track; they are routed through Alex and Anja like any other source, never written by Paul directly.
 
 ---
 
@@ -255,7 +255,7 @@ Kylie deletes the original from `other_sources/` after verifying all splits are 
 
 ### Paul: TDD Development Agent
 
-**Role:** Paul is the odd one out on purpose: everyone above is part of the knowledge pipeline (read sources in, answer questions out); Paul is the delivery track. He writes grounded, test-first ABAP, RAP, and CAP code, connecting live to SAP's official ADT MCP Server for ABAP/RAP (no abapGit) or a local repo for CAP. He reads the wiki read-only for grounding — Clean ABAP/OOP-SOLID/TDD/design-pattern rules, RAP/CAP best practice, domain facts — and never writes to `wiki/pages/`; his code goes to an external workspace supplied at invocation.
+**Role:** Paul is the odd one out on purpose: everyone above is part of the knowledge pipeline (read sources in, answer questions out); Paul is the delivery track. He writes grounded, test-first ABAP, RAP, and CAP code, connecting live to SAP's official ADT MCP Server for ABAP/RAP (no abapGit) or a local repo for CAP. He reads the wiki read-only for grounding (Clean ABAP/OOP-SOLID/TDD/design-pattern rules, RAP/CAP best practice, domain facts) and never writes to `wiki/pages/`; his code goes to an external workspace supplied at invocation.
 
 **Voice:** Disciplined, unshowy, allergic to guessing. The precision of a senior developer who has been burned by unverified assumptions before.
 
@@ -268,11 +268,11 @@ Kylie deletes the original from `other_sources/` after verifying all splits are 
 | 1 | `wiki/lookup.md` | Previously-grounded facts, cited `[T1]`/`[T1-client]` |
 | 2 | Live `[MCP]` introspection | Direct read of the real object via the ADT MCP Server |
 | 3 | `[SAP]` published docs | Official documentation, cited by URL |
-| 4 | Extraction request | If all three fail, Paul emits a structured request for a human to supply the fact — he never fabricates it |
+| 4 | Extraction request | If all three fail, Paul emits a structured request for a human to supply the fact; he never fabricates it |
 
 **Write path:** Paul connects through the ADT MCP Server, confirmed against a Dev destination every session (never Production). `integrations/claude-code-eclipse/` (an Eclipse plug-in bridging Claude Code to an ADT-open editor) is the supported connection in this repo. For ABAP/RAP he may create and assign transports but never release one; for CAP he may commit inside the given workspace but never push.
 
-**Wiki write-back duty:** every Paul hand-off includes a `## Write-back requests` section — newly-verified facts (a real signature, a real table structure) get relayed back through Alex to Anja, so the next task cites them from the wiki instead of re-running live introspection.
+**Wiki write-back duty:** every Paul hand-off includes a `## Write-back requests` section: newly-verified facts (a real signature, a real table structure) get relayed back through Alex to Anja, so the next task cites them from the wiki instead of re-running live introspection.
 
 **You interact with Paul using:** describe the ABAP/RAP/CAP object you want built or reviewed and dispatch him via the Agent tool (see Section 13's Development commands for the one formally documented shorthand, `@paul scan [object]`, used for a TDD-conformance review of code that already exists).
 
@@ -364,7 +364,7 @@ Parts 02 through 23 follow the same process. Some parts may yield no new pages i
 
 Alex:
 1. Greps `wiki/lookup.md` for `pscd`, `contract`, `archiving`, `ilm store`
-2. Reads the 2–3 most relevant pages
+2. Reads the 2-3 most relevant pages
 3. Dispatches to Adrian (technical: which specific artefacts, which T-codes)
 4. Synthesises one response, citing every claim: `[T1: ilm-archiving-objects-overview.md § PSCD Archiving Objects]`
 
@@ -380,7 +380,7 @@ The wiki is organised into 12 clusters. Each cluster covers a distinct SAP domai
 | `abap-cloud` | Core ABAP; RAP (RESTful Application Programming); CDS views; ABAP Cloud model; Clean Core methodology; ADT tooling; design patterns; abapGit |
 | `btp-platform` | SAP BTP platform services: Kyma, Cloud Foundry, identity (IAS/IPS/IAG), Work Zone, BAS, Datasphere, ETD, SAP ETD, connectivity |
 | `btp-ai` | SAP AI services: Gen AI Hub, SAP AI Core, Behavioural Insights, Joule, Claude Code, MCP, autonomous enterprise strategy |
-| `integration-cloud-integration` | SAP Integration Suite, Cloud Integration: iFlows, adapters (JMS, FTP, IDoc, JDBC, RFC, HTTP), mappings, EIP patterns, Edge Integration Cell |
+| `integration-cloud-integration` | SAP Integration Suite, Cloud Integration: iFlows, adapters (FTP, IDoc, JDBC, RFC, HTTP), mappings, EIP patterns, Edge Integration Cell |
 | `integration-api-management` | SAP Integration Suite, API Management: proxies, policies (KVM, OAuth, CSRF, threat analytics), Developer Hub, Graph |
 | `integration-suite-core` | SAP Integration Suite cross-cutting: provisioning, ISA-M methodology, B2B/Integration Advisor, Event Mesh, Migration Assessment |
 | `ilm` | SAP Information Lifecycle Management: data archiving, privacy-driven data destruction, ILM Store, retention warehouse |
@@ -451,7 +451,7 @@ For a question like *"Is using the FI-CA payment run for PSCD direct debit a sou
 
 **Step 2: Parallel dispatch**
 
-Alex spawns Aaron and Adrian as sub-agents simultaneously. Each reads only the pages relevant to their assigned question, grepping `wiki/lookup.md` first and then reading the 1–3 highest-relevance pages.
+Alex spawns Aaron and Adrian as sub-agents simultaneously. Each reads only the pages relevant to their assigned question, grepping `wiki/lookup.md` first and then reading the 1-3 highest-relevance pages.
 
 **Step 3: Grounded responses only**
 
@@ -645,7 +645,7 @@ Query arrives
       ▼
 grep wiki/lookup.md           ← Always first. Grep only; never full-read.
       │
-      ├─ Hit → read 1–3 pages ← Only the specific pages the index points to
+      ├─ Hit → read 1-3 pages ← Only the specific pages the index points to
       │
       └─ Miss → wiki/tier2-sections.md (raw source slices as fallback)
                       │

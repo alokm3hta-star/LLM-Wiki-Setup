@@ -173,12 +173,12 @@ The **runtime operational artefacts** are session-local and must also be dropped
 `wiki/.locks/` (flock targets) and `wiki/.index-dirty.*` (per-session dirty flags). They carry no portable
 content and are recreated on demand; exclude them the same way, alongside `.mcp.json`.
 
-**Exclusion vs. scaffolding — which is which.** `wiki/pending/proposals/`, `wiki/pending/cross-links-inbox/`,
+**Exclusion vs. scaffolding: which is which.** `wiki/pending/proposals/`, `wiki/pending/cross-links-inbox/`,
 `wiki/archive/`, and `wiki/.locks/` are safe to drop from the mirror payload with no placeholder, because
 their owning script creates the directory on first use (`ACTIVE.mkdir(parents=True, exist_ok=True)` in
 `new_proposal.py`; the inbox is written via ordinary file creation, tolerant of absence on read in
 `consolidate_crosslinks.py`; `ARCHIVE.mkdir(...)` / `qdir.mkdir(...)` in `rotate_archives.py`;
-`LOCK_DIR.mkdir(...)` in `with_lock.py`) — a fresh clone with the directory missing self-heals on first
+`LOCK_DIR.mkdir(...)` in `with_lock.py`); a fresh clone with the directory missing self-heals on first
 write. `wiki/pending_research/_resolved/` is different: it is filled by Sarah archive-moving closed research
 briefs per her spec, a prose instruction to an LLM agent rather than a script-guaranteed `mkdir`, so it does
 **not** self-heal the same way. Ship it in the mirror with the same placeholder convention as
@@ -188,18 +188,18 @@ choosing "just gitignore it" vs. "gitignore the content but ship a placeholder."
 
 **Cluster registries must be reset to the fresh-install stub, never carried over live.** `wiki/clusters/*.md`
 are tracked (unlike `wiki/pages/`), so a sync that copies them verbatim from the live wiki carries over
-every accumulated entity row — including real page filenames, real summaries, and real source citations
+every accumulated entity row, including real page filenames, real summaries, and real source citations
 (publisher name, book title, chapter/part) for whatever has actually been ingested. Every cluster registry
 in the mirror must show `Entity count: 0` and an empty entity table (header + divider row only, matching a
 genuinely fresh install), the same as the zero-pages rule for `wiki/pages/`. Check this for **every**
-cluster on every sync, not just the ones that look client-specific — a generic public-domain topic sourced
+cluster on every sync, not just the ones that look client-specific: a generic public-domain topic sourced
 from a named commercial publication is exactly as unsafe to carry over as a confidential one, because the
 leak is the *publisher citation and accumulated entity detail*, not the topic's sensitivity.
 
 **Genericise specific regulation/publisher naming in the mirror's illustrative text.** Independent of the
 registries above, the mirror's own documentation (README walkthroughs, schema examples, cluster one-line
-descriptions) should describe capability areas in generic product terms — e.g. "privacy-driven data
-destruction" rather than naming a specific regional data-protection regulation by acronym — and should never
+descriptions) should describe capability areas in generic product terms (e.g. "privacy-driven data
+destruction" rather than naming a specific regional data-protection regulation by acronym) and should never
 name a specific commercial publisher or cite a book/chapter/part in illustrative examples. This is a
 documentation-style rule (avoid inviting the next sync to reintroduce a specific name as "just an example"),
 separate from the registry-reset rule above, which is about real accumulated data.
