@@ -1,0 +1,8 @@
+target/
+bin/
+node_modules/
+bundles/is.mehta.claudecode.abap/lib/
+bundles/is.mehta.claudecode.abap/web/
+bundles/is.mehta.claudecode.abap/sidecar/sidecar.js
+.DS_Store
+*.log

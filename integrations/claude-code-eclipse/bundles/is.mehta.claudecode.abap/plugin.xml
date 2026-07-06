@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension point="org.eclipse.ui.views">
+      <category
+            id="is.mehta.claudecode.abap.category"
+            name="Claude Code"/>
+      <view
+            id="is.mehta.claudecode.abap.chatView"
+            name="Claude Code"
+            category="is.mehta.claudecode.abap.category"
+            class="is.mehta.claudecode.abap.views.ClaudeChatView"
+            restorable="true"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.commands">
+      <command
+            id="is.mehta.claudecode.abap.sendToClaude"
+            name="Send to Claude"
+            description="Send the current ABAP object and selection to the Claude Code session"/>
+      <command
+            id="is.mehta.claudecode.abap.openChatView"
+            name="Open Claude Code View"
+            description="Open the Claude Code chat panel"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.handlers">
+      <handler
+            commandId="is.mehta.claudecode.abap.sendToClaude"
+            class="is.mehta.claudecode.abap.handlers.SendToClaudeHandler"/>
+      <handler
+            commandId="is.mehta.claudecode.abap.openChatView"
+            class="is.mehta.claudecode.abap.handlers.OpenChatViewHandler"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.menus">
+      <menuContribution locationURI="popup:org.eclipse.ui.popup.any?after=additions">
+         <command
+               commandId="is.mehta.claudecode.abap.sendToClaude"
+               label="Send to Claude"
+               style="push">
+            <visibleWhen checkEnabled="true"/>
+         </command>
+      </menuContribution>
+   </extension>
+
+   <extension point="org.eclipse.ui.bindings">
+      <key
+            commandId="is.mehta.claudecode.abap.sendToClaude"
+            sequence="M1+M3+C"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration"
+            contextId="org.eclipse.ui.contexts.window"/>
+   </extension>
+
+   <extension point="org.eclipse.ui.preferencePages">
+      <page
+            id="is.mehta.claudecode.abap.preferences"
+            name="Claude Code for ABAP"
+            class="is.mehta.claudecode.abap.prefs.ClaudeCodePreferencePage"/>
+   </extension>
+
+   <extension point="org.eclipse.core.runtime.preferences">
+      <initializer class="is.mehta.claudecode.abap.prefs.PreferenceInitializer"/>
+   </extension>
+
+</plugin>

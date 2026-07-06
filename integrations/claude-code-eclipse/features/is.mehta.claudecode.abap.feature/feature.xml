@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature
+      id="is.mehta.claudecode.abap.feature"
+      label="Claude Code for ABAP"
+      version="0.1.0.qualifier"
+      provider-name="mehta.is">
+
+   <description>
+      Joule-style Claude Code chat panel for Eclipse + ABAP Development Tools.
+      Hosts a Claude Code session wired to the ADT MCP Server, with a Dev-only
+      editor source bridge (read_source / write_source / get_editor_context).
+   </description>
+
+   <copyright>
+      2026 mehta.is. Personal/team tooling; not an SAP product.
+   </copyright>
+
+   <license url="">
+      For internal development use on Dev systems only. See ADR-002 in the
+      project repository for the support boundary and conditions of use.
+   </license>
+
+   <plugin id="is.mehta.claudecode.abap" version="0.0.0"/>
+
+</feature>

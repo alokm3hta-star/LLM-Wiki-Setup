@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature id="is.mehta.claudecode.abap.feature">
+      <category name="claude-code"/>
+   </feature>
+   <category-def name="claude-code" label="Claude Code">
+      <description>Claude Code integration for Eclipse + ABAP Development Tools.</description>
+   </category-def>
+</site>

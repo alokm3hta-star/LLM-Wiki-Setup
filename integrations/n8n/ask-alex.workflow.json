@@ -1,0 +1,132 @@
+{
+  "name": "Ask Alex (WhatsApp -> LLM Wiki)",
+  "nodes": [
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [208, 0],
+      "id": "5e6048b1-4c4e-49f5-89d9-4d8bab60e9bd",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "082ec687-ea18-4f9f-9681-acc15f63d6e0",
+      "name": "Auth"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [96, 160],
+      "id": "b09ee39c-9a97-4d6a-97f4-02d885524c20",
+      "name": "Post"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst msg = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\nif (!msg || msg.type !== 'text') return [];\nreturn [{ json: { question: msg.text.body.replace(/'/g, ''), sender: msg.from } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [304, 160],
+      "id": "1a6708d3-567f-40cc-b8dc-74e8571e5464",
+      "name": "Fetch Sender"
+    },
+    {
+      "parameters": {
+        "command": "=security unlock-keychain -p \"$(cat /path/to/your/keychain-password-file)\" /Users/YOU/Library/Keychains/login.keychain-db && cd \"/path/to/your/LLM Wiki\" && /usr/local/bin/claude -p '@alex ask {{ $('Fetch Sender').first().json.question }}. Reply for WhatsApp: plain text, no tables, under 1200 characters. Put ONLY the final answer between the markers <<<A>>> and <<<Z>>>.' < /dev/null"
+      },
+      "type": "n8n-nodes-base.ssh",
+      "typeVersion": 1,
+      "position": [704, 144],
+      "id": "d3fe14b7-2d89-4d90-bf76-2080287bc277",
+      "name": "Call Alex",
+      "credentials": {
+        "sshPassword": {
+          "id": "REPLACE_WITH_YOUR_SSH_CREDENTIAL_ID",
+          "name": "SSH Password account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.first().json.stdout || '';\nconst m = out.match(/<<<A>>>([\\s\\S]*?)<<<Z>>>/);\nconst sender = $('Fetch Sender').first().json.sender;\nreturn [{ json: { answer: (m ? m[1] : out).trim(), sender } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [928, 160],
+      "id": "44f54356-ae16-4c36-95d9-df78f2a288d8",
+      "name": "Prep Response"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "YOUR_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.sender }}",
+        "textBody": "={{ $json.answer }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [1136, 160],
+      "id": "db83453f-02ae-470e-bd95-a4dbc15da37d",
+      "name": "Reply",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "REPLACE_WITH_YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "YOUR_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $json.sender }}",
+        "textBody": "Working please wait...",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [512, 160],
+      "id": "cacf68d1-4a2b-4923-90de-6f0628989201",
+      "name": "Say I am working",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "REPLACE_WITH_YOUR_WHATSAPP_CREDENTIAL_ID",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Auth": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] },
+    "Post": { "main": [[{ "node": "Fetch Sender", "type": "main", "index": 0 }]] },
+    "Fetch Sender": { "main": [[{ "node": "Say I am working", "type": "main", "index": 0 }]] },
+    "Call Alex": { "main": [[{ "node": "Prep Response", "type": "main", "index": 0 }]] },
+    "Prep Response": { "main": [[{ "node": "Reply", "type": "main", "index": 0 }]] },
+    "Say I am working": { "main": [[{ "node": "Call Alex", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}

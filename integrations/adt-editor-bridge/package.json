@@ -1,0 +1,53 @@
+{
+  "name": "adt-editor-bridge",
+  "displayName": "ADT Editor Bridge (MCP)",
+  "description": "Hosts a localhost MCP server exposing write_source/read_source for ADT objects, via VS Code's official ADT FileSystemProvider. Dev-only. On-policy companion to the official SAP ADT MCP Server.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "ADT Editor Bridge",
+      "properties": {
+        "adtEditorBridge.port": {
+          "type": "number",
+          "default": 3939,
+          "description": "Localhost (127.0.0.1) port for the MCP server."
+        },
+        "adtEditorBridge.devSystemAllowlist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Allowlist of Dev ABAP destination IDs (e.g. YOUR_DEV_DEST). Any write/read whose URI resolves to a destination NOT on this list is refused. Empty = refuse everything."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "watch": "npm run build -- --watch --sourcemap",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.105.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code for ABAP</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header id="header">
+    <div class="header-row">
+      <span id="title" class="title">Claude Code for ABAP</span>
+      <span id="model-chip" class="chip" hidden></span>
+      <span id="adt-dot" class="dot unknown" title="ADT MCP server: status unknown"></span>
+      <span class="spacer"></span>
+    </div>
+    <div class="header-row controls">
+      <select id="permission-mode" title="Permission mode" disabled>
+        <option value="default">default</option>
+        <option value="acceptEdits">acceptEdits</option>
+        <option value="plan">plan</option>
+      </select>
+      <select id="model-select" title="Model (default = your Claude Code default). Switches immediately, mid-conversation." disabled>
+        <option value="">model: default</option>
+      </select>
+      <select id="effort-select" title="Reasoning effort (default = high). Applies from your next message; the conversation continues." disabled>
+        <option value="">effort: default</option>
+        <option value="low">effort: low</option>
+        <option value="medium">effort: medium</option>
+        <option value="high">effort: high</option>
+        <option value="xhigh">effort: xhigh</option>
+        <option value="max">effort: max</option>
+      </select>
+      <span class="spacer"></span>
+      <button id="btn-new" type="button" disabled>New session</button>
+      <button id="btn-stop" type="button" disabled>Stop</button>
+    </div>
+  </header>
+  <div id="banner" hidden>Reconnecting&hellip;</div>
+  <main id="transcript"></main>
+  <footer id="composer">
+    <div id="attach-area" hidden>
+      <span id="attach-chip" class="attach-chip"></span>
+      <button id="attach-dismiss" type="button" title="Remove attached context">&times;</button>
+    </div>
+    <div class="composer-row">
+      <textarea id="input" rows="2" placeholder="Ask Claude Code&hellip; (Enter to send, Shift+Enter for newline)" disabled></textarea>
+      <button id="btn-send" type="button" disabled>Send</button>
+    </div>
+  </footer>
+  <script src="./app.js"></script>
+</body>
+</html>

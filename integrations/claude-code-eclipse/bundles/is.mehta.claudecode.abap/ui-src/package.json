@@ -1,0 +1,19 @@
+{
+  "name": "claudecode-abap-ui",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Joule-style chat web UI for Claude Code for ABAP (served by the sidecar, loaded in the Eclipse SWT Browser)",
+  "scripts": {
+    "build": "esbuild app.ts --bundle --minify --format=iife --outfile=../web/app.js && cp index.html styles.css ../web/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.0",
+    "highlight.js": "^11.0.0",
+    "marked": "^18.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,10 @@
+# Build artefacts (run `npm install && npm run build` locally)
+node_modules/
+dist/
+out/
+*.vsix
+*.map
+
+# Never commit a real MCP token file; the .example placeholder is committed instead
+.mcp.json
+!.mcp.json.example
