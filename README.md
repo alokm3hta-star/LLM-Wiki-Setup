@@ -45,7 +45,7 @@ As of the reference build this starter kit was taken from, the wiki held **over 
 
 **An AI agent** is Claude operating with a specific persona, a specific set of rules, and a specific job. Instead of one generic AI doing everything, you have multiple specialised agents, each trained on their role. One agent knows how to ingest documents. Another knows how to answer strategy questions. Another checks the quality of the first agent's work. They work as a team.
 
-This wiki runs **seven agents**. They each have a name, a voice, a philosophy, and a clearly defined responsibility. They hand work to each other. They check each other's output. And they are all governed by guardrails that prevent them from making things up.
+This wiki runs **eight agents**. They each have a name, a voice, a philosophy, and a clearly defined responsibility. They hand work to each other. They check each other's output. And they are all governed by guardrails that prevent them from making things up.
 
 ---
 
@@ -98,6 +98,37 @@ You have a document
 ```
 
 Every step is automated. Every agent hands off to the next. You interact mainly at the top (dropping in documents) and at the bottom (asking questions). Everything in between runs itself.
+
+That covers the knowledge track. A second track runs in parallel for delivery — Paul reads the same `wiki/lookup.md` for grounding, but writes code, not pages, and never touches `wiki/pages/`:
+
+```
+┌───────────────┐
+│  wiki/lookup.md│  ← Same master index Paul reads for grounding, step 1 of his ladder
+└───────┬───────┘
+        │  @paul scan [object] / a development task
+        ▼
+┌────────────────────────────────────────────┐
+│  Paul's verification ladder                 │
+│  lookup.md → live [MCP] introspection →     │
+│  [SAP] published docs → extraction request  │
+│  (never a guess)                            │
+└───────────────────┬────────────────────────┘
+        │  write path: ADT MCP Server (ABAP/RAP, Dev only) or local repo (CAP)
+        ▼
+┌────────────────────────────────────────────┐
+│  External code workspace                    │
+│  Test-first ABAP/RAP/CAP; never wiki/pages/ │
+└───────────────────┬────────────────────────┘
+        │  newly-verified facts, every hand-off
+        ▼
+┌────────────────────────────────────────────┐
+│  Write-back request → Alex relays it to     │
+│  Anja → next task cites it from the wiki    │
+│  instead of re-checking live                │
+└────────────────────────────────────────────┘
+```
+
+The two tracks share only the wiki: the knowledge track writes it, Paul reads it, and Paul's write-backs are the one bridge back into the knowledge track — routed through Alex and Anja like any other source, never written by Paul directly.
 
 ---
 
@@ -219,6 +250,31 @@ Kylie deletes the original from `other_sources/` after verifying all splits are 
 **If Dana fails:** She returns a detailed report. Anja reworks the flagged pages. Dana checks again. This cycle repeats up to three rounds. If it still fails after three rounds, it escalates to you rather than silently passing.
 
 **Dana is strictly read-only.** She reports; she never fixes. All fixes go through Anja (page rework) or Sarah (curation proposals).
+
+---
+
+### Paul: TDD Development Agent
+
+**Role:** Paul is the odd one out on purpose: everyone above is part of the knowledge pipeline (read sources in, answer questions out); Paul is the delivery track. He writes grounded, test-first ABAP, RAP, and CAP code, connecting live to SAP's official ADT MCP Server for ABAP/RAP (no abapGit) or a local repo for CAP. He reads the wiki read-only for grounding — Clean ABAP/OOP-SOLID/TDD/design-pattern rules, RAP/CAP best practice, domain facts — and never writes to `wiki/pages/`; his code goes to an external workspace supplied at invocation.
+
+**Voice:** Disciplined, unshowy, allergic to guessing. The precision of a senior developer who has been burned by unverified assumptions before.
+
+**Philosophy:** *"Code without a failing test first is a guess. An SAP signature without a live check is a second guess. I ship neither."*
+
+**Paul's verification ladder:** rather than ever inventing an SAP method signature, table structure, or API shape, Paul works down a strict ladder until he finds ground truth:
+
+| Step | Source | What it gives Paul |
+|------|--------|---------------------|
+| 1 | `wiki/lookup.md` | Previously-grounded facts, cited `[T1]`/`[T1-client]` |
+| 2 | Live `[MCP]` introspection | Direct read of the real object via the ADT MCP Server |
+| 3 | `[SAP]` published docs | Official documentation, cited by URL |
+| 4 | Extraction request | If all three fail, Paul emits a structured request for a human to supply the fact — he never fabricates it |
+
+**Write path:** Paul connects through the ADT MCP Server, confirmed against a Dev destination every session (never Production). `integrations/claude-code-eclipse/` (an Eclipse plug-in bridging Claude Code to an ADT-open editor) is the supported connection in this repo. For ABAP/RAP he may create and assign transports but never release one; for CAP he may commit inside the given workspace but never push.
+
+**Wiki write-back duty:** every Paul hand-off includes a `## Write-back requests` section — newly-verified facts (a real signature, a real table structure) get relayed back through Alex to Anja, so the next task cites them from the wiki instead of re-running live introspection.
+
+**You interact with Paul using:** describe the ABAP/RAP/CAP object you want built or reviewed and dispatch him via the Agent tool (see Section 13's Development commands for the one formally documented shorthand, `@paul scan [object]`, used for a TDD-conformance review of code that already exists).
 
 ---
 
@@ -701,7 +757,7 @@ LLM Wiki/
 │
 ├── .claude/
 │   ├── settings.json            ← Hooks configuration
-│   └── agents/                  ← Registered agent profiles (7 agents)
+│   └── agents/                  ← Registered agent profiles (8 agents)
 │
 ├── scripts/
 │   ├── build_index.py           ← Regenerates wiki/lookup.md
@@ -736,6 +792,10 @@ LLM Wiki/
 ├── Review/                      ← Design docs to review against the wiki
 │   └── README.md
 │
+├── integrations/                ← Optional bridges for Paul's live ADT MCP write path + Alex-over-WhatsApp
+│   ├── claude-code-eclipse/     ← Eclipse plug-in: Claude Code ↔ ADT-open editor, for SAP GUI/Eclipse ABAP workflows
+│   └── n8n/                     ← Sanitised n8n workflow template: WhatsApp → @alex ask
+│
 └── wiki/
     ├── index.md                 ← Master registry (clusters, stats, agents)
     ├── state.md                 ← Current ingestion status (read at session start)
@@ -753,7 +813,10 @@ LLM Wiki/
     │   ├── anja-ingest.md
     │   ├── sarah-curator.md
     │   ├── dana-validator.md
-    │   └── kylie-convert.md
+    │   ├── kylie-convert.md
+    │   ├── paul-dev.md
+    │   ├── paul-dev-card.md         ← Paul's craft-rules core (Clean ABAP/OOP-SOLID/TDD/patterns)
+    │   └── paul-card-packs/         ← Lazily-loaded rule-body packs for paul-dev-card.md
     │
     ├── clusters/                ← Cluster registries (one per domain)
     │   ├── trm-pscd-core.md
@@ -832,6 +895,13 @@ LLM Wiki/
 | Command | Who handles it | What it does |
 |---------|---------------|-------------|
 | `@dana verify` | Dana | Full post-ingest verification pass (also runs automatically after every ingest) |
+
+### Development commands
+
+| Command | Who handles it | What it does |
+|---------|---------------|-------------|
+| `@paul scan [object]` | Paul | Phase-1 TDD-conformance review of existing ABAP code |
+| `@paul scan [object] full` | Paul | All 3 review phases sequentially, reporting findings after each |
 
 ### Direct specialist commands
 
@@ -914,7 +984,7 @@ A wiki with 50 grounded pages is more valuable than one with 5,000 unverified cl
 
 This project is an implementation of the **"LLM Wiki" pattern** described by **Andrej Karpathy** in [this gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). The core idea comes from there: rather than a stateless RAG system that re-reads your raw documents on every query, you have the LLM **incrementally build and maintain a persistent, compounding wiki** that sits between you and your sources, organised in three layers (immutable raw sources, an LLM-maintained Markdown wiki, and a schema file such as `CLAUDE.md`), with ingest, query, and lint operations over an `index.md` catalogue and an append-only `log.md`.
 
-This starter kit is one concrete instantiation of that pattern, specialised for SAP consulting and pushed hard towards grounding: a team of seven specialist agents that check each other, section-level citations on every claim, and hook-enforced guardrails with validation on every change. The pattern is Karpathy's; this particular disciplined, multi-agent realisation is what this repository adds.
+This starter kit is one concrete instantiation of that pattern, specialised for SAP consulting and pushed hard towards grounding: a team of eight specialist agents that check each other, section-level citations on every claim, and hook-enforced guardrails with validation on every change. The pattern is Karpathy's; this particular disciplined, multi-agent realisation is what this repository adds.
 
 *A small homage:* the agents are named, with affection, after a team I was once lucky to work with. The names are the tribute; the personalities and mottos are invented for this project, and any resemblance to how they really work is, of course, entirely deliberate.
 
