@@ -27,10 +27,11 @@ public final class EditorSourceGateway {
 
     /** Diagnostic-rich handle for one open editor. */
     public record EditorHandle(IEditorPart part, ITextEditor textEditor, IDocument document,
-            String title, String tooltip, String project) {
+            String title, String tooltip, String project, String path) {
 
         public String describe() {
-            return title + " [project=" + project + ", editorClass=" + part.getClass().getSimpleName()
+            return title + " [project=" + project + ", path=" + path
+                    + ", editorClass=" + part.getClass().getSimpleName()
                     + ", textEditor=" + (textEditor != null) + ", document=" + (document != null) + "]";
         }
     }
@@ -70,7 +71,7 @@ public final class EditorSourceGateway {
             document = part.getAdapter(IDocument.class);
         }
         return new EditorHandle(part, textEditor, document, cleanTitle(part.getTitle()),
-                part.getTitleToolTip(), projectOf(part));
+                part.getTitleToolTip(), projectOf(part), resourcePathOf(part));
     }
 
     /** Editors whose (dirty-marker-stripped) title matches the object name. */
@@ -116,11 +117,47 @@ public final class EditorSourceGateway {
         return project == null ? null : project.getName();
     }
 
-    /** Strips the dirty marker Eclipse prefixes onto part names. */
+    /**
+     * Workspace-relative resource path of the open object, e.g.
+     * "/Invenio_S4HANA_2025/.../ZCL_FOO/ZCL_FOO.clas.abap". This is the exact
+     * "/ProjectName/path/..." shape the SAP ADT MCP server's
+     * abap_activate_objects / abap_run_unit_tests tools consume, so surfacing
+     * it lets the caller chain a bridge lookup straight into those tools
+     * instead of guessing the path. Null when the ADT editor input does not
+     * adapt to an IResource (pure logical objects); callers fall back to the
+     * manual activate/run path in that case.
+     */
+    private static String resourcePathOf(IEditorPart part) {
+        IEditorInput input = part.getEditorInput();
+        if (input == null) {
+            return null;
+        }
+        IResource resource = input.getAdapter(IResource.class);
+        if (resource != null && resource.getFullPath() != null) {
+            return resource.getFullPath().toString();
+        }
+        return null;
+    }
+
+    /**
+     * Strips decorations Eclipse/ADT prefix onto part titles: the dirty-marker
+     * "*" and, when a workspace spans multiple destinations, a bracketed system
+     * alias such as "[S4H] " ahead of the object name.
+     */
     private static String cleanTitle(String title) {
         if (title == null) {
             return "";
         }
-        return title.startsWith("*") ? title.substring(1).trim() : title.trim();
+        String t = title.trim();
+        if (t.startsWith("*")) {
+            t = t.substring(1).trim();
+        }
+        if (t.startsWith("[")) {
+            int close = t.indexOf(']');
+            if (close > 0) {
+                t = t.substring(close + 1).trim();
+            }
+        }
+        return t;
     }
 }

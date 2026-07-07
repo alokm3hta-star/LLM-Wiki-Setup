@@ -17,8 +17,10 @@
     <div class="header-row controls">
       <select id="permission-mode" title="Permission mode" disabled>
         <option value="default">default</option>
+        <option value="auto">auto</option>
         <option value="acceptEdits">acceptEdits</option>
         <option value="plan">plan</option>
+        <option value="bypassPermissions">bypassPermissions</option>
       </select>
       <select id="model-select" title="Model (default = your Claude Code default). Switches immediately, mid-conversation." disabled>
         <option value="">model: default</option>
@@ -43,8 +45,12 @@
       <span id="attach-chip" class="attach-chip"></span>
       <button id="attach-dismiss" type="button" title="Remove attached context">&times;</button>
     </div>
+    <div id="file-attach-area" hidden></div>
     <div class="composer-row">
-      <textarea id="input" rows="2" placeholder="Ask Claude Code&hellip; (Enter to send, Shift+Enter for newline)" disabled></textarea>
+      <button id="btn-attach" type="button" class="icon-btn" title="Attach files (images, PDF, text/markdown, Excel, Word)" disabled>&#128206;</button>
+      <input id="file-input" type="file" multiple hidden
+        accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,.md,.markdown,.txt,.text,.csv,.tsv,.json,.log,.xml,.yaml,.yml,.xlsx,.xlsm,.xls,.docx,image/*,application/pdf,text/*">
+      <textarea id="input" rows="2" placeholder="Ask Claude Code&hellip; (Enter to send, Shift+Enter for newline; attach or drop files)" disabled></textarea>
       <button id="btn-send" type="button" disabled>Send</button>
     </div>
   </footer>

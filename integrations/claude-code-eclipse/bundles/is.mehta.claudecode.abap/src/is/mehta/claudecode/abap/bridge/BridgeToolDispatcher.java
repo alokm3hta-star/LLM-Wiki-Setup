@@ -66,6 +66,10 @@ public final class BridgeToolDispatcher {
         JsonObject ok = ok();
         ok.addProperty("object_name", handle.title());
         ok.addProperty("destination", destination);
+        if (handle.path() != null) {
+            // Workspace-relative path for the SAP ADT MCP activate/run-tests tools.
+            ok.addProperty("path", handle.path());
+        }
         ok.addProperty("dirty", handle.part().isDirty());
         ok.addProperty("content", handle.document().get());
         return ok;
@@ -119,6 +123,9 @@ public final class BridgeToolDispatcher {
             JsonObject a = new JsonObject();
             a.addProperty("object_name", active.title());
             a.addProperty("project", active.project());
+            if (active.path() != null) {
+                a.addProperty("path", active.path());
+            }
             a.addProperty("dirty", active.part().isDirty());
             String destination = guard.resolve(active);
             a.addProperty("on_dev_allowlist", destination != null);
@@ -143,6 +150,9 @@ public final class BridgeToolDispatcher {
             JsonObject o = new JsonObject();
             o.addProperty("object_name", h.title());
             o.addProperty("project", h.project());
+            if (h.path() != null) {
+                o.addProperty("path", h.path());
+            }
             o.addProperty("text_editor_adaptable", h.textEditor() != null);
             o.addProperty("document_available", h.document() != null);
             open.add(o);

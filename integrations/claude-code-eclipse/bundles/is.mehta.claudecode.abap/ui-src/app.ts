@@ -129,6 +129,7 @@ type ServerFrame =
   | { type: "tool_started"; id: string; name: string; input: Record<string, unknown> }
   | { type: "tool_result"; id: string; ok: boolean; preview: string }
   | { type: "permission_request"; id: string; toolName: string; input: Record<string, unknown> }
+  | { type: "question_request"; id: string; payload: unknown }
   | { type: "turn_complete"; costUsd: number | null; durationMs: number | null; sessionId: string | null }
   | { type: "status"; adtMcp: { connected: boolean }; model: string | null }
   | { type: "error"; message: string }
@@ -168,6 +169,10 @@ const transcript = el<HTMLElement>("transcript");
 const attachArea = el<HTMLDivElement>("attach-area");
 const attachChip = el<HTMLSpanElement>("attach-chip");
 const attachDismiss = el<HTMLButtonElement>("attach-dismiss");
+const composer = el<HTMLElement>("composer");
+const fileAttachArea = el<HTMLDivElement>("file-attach-area");
+const btnAttach = el<HTMLButtonElement>("btn-attach");
+const fileInput = el<HTMLInputElement>("file-input");
 const input = el<HTMLTextAreaElement>("input");
 const btnSend = el<HTMLButtonElement>("btn-send");
 
@@ -201,6 +206,25 @@ interface ToolEntry {
 const tools = new Map<string, ToolEntry>();
 
 let pendingContext: EditorContext | null = null;
+
+interface PendingFile {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  dataBase64: string;
+}
+let pendingFiles: PendingFile[] = [];
+
+// Kept in step with the sidecar's ALLOWED_ATTACH_EXT and the <input accept>.
+const ALLOWED_FILE_EXT = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
+  ".pdf",
+  ".md", ".markdown", ".txt", ".text", ".csv", ".tsv", ".json", ".log", ".xml", ".yaml", ".yml",
+  ".xlsx", ".xlsm", ".xls", ".docx",
+]);
+const MAX_FILE_BYTES = 25 * 1024 * 1024; // per file; also enforced sidecar-side
+let fileSeq = 0;
 
 /* ---------------- helpers ---------------- */
 
@@ -260,6 +284,7 @@ function updateControls(): void {
   const canType = wsOpen && sessionReady && !busy;
   input.disabled = !canType;
   btnSend.disabled = !canType;
+  btnAttach.disabled = !canType;
   btnStop.disabled = !(wsOpen && busy);
   btnNew.disabled = !wsOpen;
   permSelect.disabled = !wsOpen;
@@ -343,7 +368,11 @@ function scheduleStreamRender(): void {
   }, wait);
 }
 
-function addUserBubble(text: string, ctx: EditorContext | null): void {
+function addUserBubble(
+  text: string,
+  ctx: EditorContext | null,
+  fileNames: string[] = []
+): void {
   const root = document.createElement("div");
   root.className = "msg user";
   root.textContent = text;
@@ -351,6 +380,12 @@ function addUserBubble(text: string, ctx: EditorContext | null): void {
     const tag = document.createElement("span");
     tag.className = "ctx-tag";
     tag.textContent = "context: " + contextLabel(ctx);
+    root.appendChild(tag);
+  }
+  for (const name of fileNames) {
+    const tag = document.createElement("span");
+    tag.className = "ctx-tag";
+    tag.textContent = "file: " + name;
     root.appendChild(tag);
   }
   appendEntry(root);
@@ -511,6 +546,231 @@ function onPermissionRequest(id: string, toolName: string, toolInput: Record<str
   appendEntry(card);
 }
 
+/* ---------------- AskUserQuestion picker ---------------- */
+
+interface QuestionOption {
+  label: string;
+  description?: string;
+}
+interface QuestionSpec {
+  question: string;
+  header?: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
+/** The dialog payload is transported opaquely by the SDK; pull the questions
+ *  out defensively so an unexpected wrapper does not break the picker. */
+function extractQuestions(payload: unknown): QuestionSpec[] {
+  const p = payload as Record<string, unknown> | null;
+  const arr: unknown =
+    p && Array.isArray(p["questions"])
+      ? p["questions"]
+      : Array.isArray(payload)
+        ? payload
+        : null;
+  if (!Array.isArray(arr)) return [];
+  const out: QuestionSpec[] = [];
+  for (const q of arr) {
+    if (!q || typeof q !== "object") continue;
+    const qo = q as Record<string, unknown>;
+    const options: QuestionOption[] = [];
+    const rawOpts = Array.isArray(qo["options"]) ? (qo["options"] as unknown[]) : [];
+    for (const o of rawOpts) {
+      if (typeof o === "string") {
+        options.push({ label: o });
+      } else if (o && typeof o === "object") {
+        const oo = o as Record<string, unknown>;
+        const label =
+          typeof oo["label"] === "string"
+            ? (oo["label"] as string)
+            : typeof oo["text"] === "string"
+              ? (oo["text"] as string)
+              : null;
+        if (label) {
+          options.push({
+            label,
+            description:
+              typeof oo["description"] === "string" ? (oo["description"] as string) : undefined,
+          });
+        }
+      }
+    }
+    out.push({
+      question:
+        typeof qo["question"] === "string"
+          ? (qo["question"] as string)
+          : typeof qo["prompt"] === "string"
+            ? (qo["prompt"] as string)
+            : "",
+      header: typeof qo["header"] === "string" ? (qo["header"] as string) : undefined,
+      options,
+      multiSelect: qo["multiSelect"] === true || qo["multi_select"] === true,
+    });
+  }
+  return out;
+}
+
+function onQuestionRequest(id: string, payload: unknown): void {
+  const questions = extractQuestions(payload);
+
+  const card = document.createElement("div");
+  card.className = "q-card";
+
+  const title = document.createElement("div");
+  title.className = "q-title";
+  title.textContent = questions.length > 1 ? "Claude has a few questions" : "Claude is asking";
+  card.appendChild(title);
+
+  const selections = new Map<string, Set<string>>();
+  const otherText = new Map<string, string>();
+
+  const submitBtn = document.createElement("button");
+  submitBtn.type = "button";
+  submitBtn.className = "allow";
+  submitBtn.textContent = "Submit";
+
+  const refreshSubmit = (): void => {
+    submitBtn.disabled = !questions.every((q) => {
+      const sel = selections.get(q.question);
+      const other = (otherText.get(q.question) ?? "").trim();
+      return (sel != null && sel.size > 0) || other.length > 0;
+    });
+  };
+
+  if (questions.length === 0) {
+    // Could not parse the payload — show it raw so the user can Cancel rather
+    // than the session hanging on an unanswered dialog.
+    const pre = document.createElement("pre");
+    pre.className = "perm-json mono";
+    pre.textContent = safeJson(payload);
+    card.appendChild(pre);
+  }
+
+  for (const q of questions) {
+    selections.set(q.question, new Set<string>());
+
+    const block = document.createElement("div");
+    block.className = "q-block";
+
+    if (q.header) {
+      const h = document.createElement("div");
+      h.className = "q-header";
+      h.textContent = q.header;
+      block.appendChild(h);
+    }
+    const qt = document.createElement("div");
+    qt.className = "q-question";
+    qt.textContent = q.question;
+    block.appendChild(qt);
+
+    const opts = document.createElement("div");
+    opts.className = "q-options";
+
+    for (const o of q.options) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "q-option";
+
+      const lab = document.createElement("div");
+      lab.className = "q-option-label";
+      lab.textContent = o.label;
+      btn.appendChild(lab);
+      if (o.description) {
+        const d = document.createElement("div");
+        d.className = "q-option-desc";
+        d.textContent = o.description;
+        btn.appendChild(d);
+      }
+
+      btn.addEventListener("click", () => {
+        const set = selections.get(q.question) as Set<string>;
+        if (q.multiSelect) {
+          if (set.has(o.label)) {
+            set.delete(o.label);
+            btn.classList.remove("selected");
+          } else {
+            set.add(o.label);
+            btn.classList.add("selected");
+          }
+        } else {
+          set.clear();
+          for (const c of Array.from(opts.querySelectorAll(".q-option"))) {
+            c.classList.remove("selected");
+          }
+          set.add(o.label);
+          btn.classList.add("selected");
+        }
+        refreshSubmit();
+      });
+      opts.appendChild(btn);
+    }
+    block.appendChild(opts);
+
+    // AskUserQuestion always permits a free-text answer ("Other").
+    const otherInput = document.createElement("input");
+    otherInput.type = "text";
+    otherInput.className = "q-other";
+    otherInput.placeholder = "Other… (type a custom answer)";
+    otherInput.addEventListener("input", () => {
+      otherText.set(q.question, otherInput.value);
+      if (!q.multiSelect && otherInput.value.trim().length > 0) {
+        const set = selections.get(q.question) as Set<string>;
+        set.clear();
+        for (const c of Array.from(opts.querySelectorAll(".q-option"))) {
+          c.classList.remove("selected");
+        }
+      }
+      refreshSubmit();
+    });
+    block.appendChild(otherInput);
+
+    card.appendChild(block);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "q-actions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "deny";
+  cancelBtn.textContent = "Cancel";
+
+  const finish = (cancelled: boolean): void => {
+    submitBtn.disabled = cancelBtn.disabled = true;
+    if (cancelled) {
+      sendFrame({ type: "question_response", id, cancelled: true });
+    } else {
+      const answers: Record<string, string[]> = {};
+      for (const q of questions) {
+        const list = Array.from(selections.get(q.question) as Set<string>);
+        const other = (otherText.get(q.question) ?? "").trim();
+        if (other) list.push(other);
+        answers[q.question] = list;
+      }
+      sendFrame({ type: "question_response", id, answers });
+    }
+    withStick(() => {
+      const outcome = document.createElement("div");
+      outcome.className = "perm-outcome " + (cancelled ? "denied" : "ok");
+      outcome.textContent = cancelled ? "Question dismissed" : "Answer sent";
+      card.classList.add("resolved");
+      card.replaceChildren(outcome);
+    });
+  };
+
+  submitBtn.addEventListener("click", () => finish(false));
+  cancelBtn.addEventListener("click", () => finish(true));
+
+  if (questions.length > 0) {
+    submitBtn.disabled = true;
+    actions.appendChild(submitBtn);
+  }
+  actions.appendChild(cancelBtn);
+  card.appendChild(actions);
+  appendEntry(card);
+}
+
 /* ---------------- attach chip ---------------- */
 
 function setPendingContext(ctx: EditorContext): void {
@@ -530,6 +790,128 @@ function clearPendingContext(): void {
 
 attachDismiss.addEventListener("click", clearPendingContext);
 
+/* ---------------- file attachments ---------------- */
+
+function extOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+}
+
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function readAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const res = String(r.result); // "data:<mime>;base64,<payload>"
+      const comma = res.indexOf(",");
+      resolve(comma >= 0 ? res.slice(comma + 1) : res);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+function renderFileChips(): void {
+  fileAttachArea.replaceChildren();
+  for (const f of pendingFiles) {
+    const chip = document.createElement("span");
+    chip.className = "file-chip";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "file-name";
+    nameEl.textContent = f.name;
+    nameEl.title = f.name;
+
+    const sizeEl = document.createElement("span");
+    sizeEl.className = "file-size";
+    sizeEl.textContent = humanSize(f.size);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "file-remove";
+    remove.textContent = "×";
+    remove.title = "Remove " + f.name;
+    remove.addEventListener("click", () => {
+      pendingFiles = pendingFiles.filter((x) => x.id !== f.id);
+      renderFileChips();
+    });
+
+    chip.append(nameEl, sizeEl, remove);
+    fileAttachArea.appendChild(chip);
+  }
+  fileAttachArea.hidden = pendingFiles.length === 0;
+}
+
+function clearPendingFiles(): void {
+  pendingFiles = [];
+  renderFileChips();
+}
+
+async function addFiles(files: FileList | File[]): Promise<void> {
+  const rejected: string[] = [];
+  for (const file of Array.from(files)) {
+    const ext = extOf(file.name);
+    if (ext && !ALLOWED_FILE_EXT.has(ext)) {
+      rejected.push(file.name + " (type not supported)");
+      continue;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      rejected.push(file.name + " (over " + humanSize(MAX_FILE_BYTES) + ")");
+      continue;
+    }
+    try {
+      const dataBase64 = await readAsBase64(file);
+      pendingFiles.push({
+        id: "f" + ++fileSeq,
+        name: file.name,
+        mime: file.type || "",
+        size: file.size,
+        dataBase64,
+      });
+    } catch {
+      rejected.push(file.name + " (could not read)");
+    }
+  }
+  renderFileChips();
+  if (rejected.length) {
+    addErrorBubble("Some files were not attached: " + rejected.join("; "));
+  }
+}
+
+btnAttach.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  if (fileInput.files && fileInput.files.length) void addFiles(fileInput.files);
+  fileInput.value = ""; // allow re-picking the same file
+});
+
+// Drag-and-drop anywhere on the composer.
+composer.addEventListener("dragover", (e: DragEvent) => {
+  if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }
+});
+composer.addEventListener("drop", (e: DragEvent) => {
+  if (e.dataTransfer && e.dataTransfer.files.length) {
+    e.preventDefault();
+    void addFiles(e.dataTransfer.files);
+  }
+});
+
+// Paste an image straight from the clipboard.
+input.addEventListener("paste", (e: ClipboardEvent) => {
+  const items = e.clipboardData?.files;
+  if (items && items.length) {
+    e.preventDefault();
+    void addFiles(items);
+  }
+});
+
 /* ---------------- frame handling ---------------- */
 
 function handleFrame(frame: ServerFrame): void {
@@ -539,7 +921,11 @@ function handleFrame(frame: ServerFrame): void {
       setBusy(false);
       setModel(frame.model);
       setAdtDot(frame.adtMcp ? frame.adtMcp.connected : null);
-      if (["default", "acceptEdits", "plan"].includes(frame.permissionMode)) {
+      if (
+        ["default", "auto", "acceptEdits", "plan", "bypassPermissions"].includes(
+          frame.permissionMode,
+        )
+      ) {
         permSelect.value = frame.permissionMode;
       }
       if (frame.modelOverride !== undefined) {
@@ -600,6 +986,10 @@ function handleFrame(frame: ServerFrame): void {
     }
     case "permission_request": {
       onPermissionRequest(frame.id, frame.toolName, frame.input ?? {});
+      break;
+    }
+    case "question_request": {
+      onQuestionRequest(frame.id, frame.payload);
       break;
     }
     case "turn_complete": {
@@ -695,11 +1085,19 @@ function connect(): void {
 
 function doSend(): void {
   const text = input.value.trim();
-  if (!text || !wsOpen || !sessionReady || busy) return;
+  if ((!text && pendingFiles.length === 0) || !wsOpen || !sessionReady || busy) return;
   const ctx = pendingContext;
-  sendFrame({ type: "user_message", text, context: ctx ?? null });
-  addUserBubble(text, ctx);
+  const attachments = pendingFiles.map((f) => ({
+    name: f.name,
+    mime: f.mime,
+    size: f.size,
+    dataBase64: f.dataBase64,
+  }));
+  const fileNames = pendingFiles.map((f) => f.name);
+  sendFrame({ type: "user_message", text, context: ctx ?? null, attachments });
+  addUserBubble(text, ctx, fileNames);
   clearPendingContext();
+  clearPendingFiles();
   input.value = "";
   autoGrow();
   setBusy(true);
@@ -731,12 +1129,19 @@ btnNew.addEventListener("click", () => {
   tools.clear();
   finishStreamingBubble();
   clearPendingContext();
+  clearPendingFiles();
   setBusy(false);
 });
 
 permSelect.addEventListener("change", () => {
   const mode = permSelect.value;
-  if (mode === "default" || mode === "acceptEdits" || mode === "plan") {
+  if (
+    mode === "default" ||
+    mode === "auto" ||
+    mode === "acceptEdits" ||
+    mode === "plan" ||
+    mode === "bypassPermissions"
+  ) {
     sendFrame({ type: "set_permission_mode", mode });
   }
 });

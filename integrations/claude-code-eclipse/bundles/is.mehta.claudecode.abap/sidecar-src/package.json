@@ -3,7 +3,7 @@
   "private": true,
   "description": "Build workspace for the Claude Code ABAP sidecar (bundled to ../sidecar/sidecar.js)",
   "scripts": {
-    "build": "esbuild main.ts --bundle --platform=node --target=node20 --format=cjs --external:@anthropic-ai/claude-agent-sdk --external:zod --external:ws --outfile=../sidecar/sidecar.js",
+    "build": "esbuild main.ts --bundle --platform=node --target=node20 --format=cjs --external:@anthropic-ai/claude-agent-sdk --external:zod --external:ws --external:xlsx --external:mammoth --outfile=../sidecar/sidecar.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -11,8 +11,10 @@
     "@types/node": "^22.15.0",
     "@types/ws": "^8.18.0",
     "esbuild": "^0.25.0",
+    "mammoth": "^1.8.0",
     "typescript": "^5.9.0",
     "ws": "^8.21.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.0.0"
   }
 }

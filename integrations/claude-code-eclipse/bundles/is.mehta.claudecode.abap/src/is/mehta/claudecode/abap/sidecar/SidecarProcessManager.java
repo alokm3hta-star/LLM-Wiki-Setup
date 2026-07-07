@@ -72,7 +72,12 @@ public final class SidecarProcessManager {
         this.store = store;
         this.dispatcher = new BridgeToolDispatcher(store);
         // Registered exactly once: the Activator holds a single manager instance.
-        AdtMcpTokenLocator.onChange(() -> restart("ADT MCP settings changed"));
+        // Push the new url/token to the live sidecar instead of restarting it:
+        // the sidecar re-registers sap-adt-mcp in place (Query.setMcpServers),
+        // so a token that was absent or stale at spawn is corrected without the
+        // user having to toggle the ADT MCP Server off and on. If the sidecar is
+        // not running the push is a no-op; onReady re-sends the current config.
+        AdtMcpTokenLocator.onChange(this::sendAdtConfig);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             Process p = process;
             if (p != null) {
@@ -433,12 +438,30 @@ public final class SidecarProcessManager {
             pendingEditorContext.clear();
         }
         log(IStatus.INFO, "Sidecar ready on 127.0.0.1:" + port, null);
+        // Read the ADT token fresh at ready-time and push it: the spawn-time env
+        // snapshot can be empty or stale if SAP's ADT MCP bundle initialised (or
+        // rotated its token) after we launched. This closes that startup race.
+        sendAdtConfig();
         for (JsonObject frame : buffered) {
             writeFrame(frame);
         }
         for (Runnable listener : readyListeners) {
             safeRun(listener);
         }
+    }
+
+    /**
+     * Pushes the current ADT MCP url + token to the sidecar as an {@code
+     * adt_config} frame. No-op when the sidecar has no open stdin (not started);
+     * onReady re-sends once it is up. Safe to call from the preference-change
+     * thread — writeFrame serialises on the write lock.
+     */
+    private void sendAdtConfig() {
+        JsonObject frame = new JsonObject();
+        frame.addProperty("type", "adt_config");
+        frame.addProperty("url", "http://localhost:" + store.getInt(Prefs.ADT_MCP_PORT) + "/mcp");
+        frame.addProperty("token", AdtMcpTokenLocator.token());
+        writeFrame(frame);
     }
 
     private void onBridgeRequest(JsonObject msg) {

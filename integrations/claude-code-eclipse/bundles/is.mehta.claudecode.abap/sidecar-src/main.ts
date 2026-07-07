@@ -53,14 +53,42 @@ let sdk: SdkModule;
 // Section 1: environment + logging helpers
 // ---------------------------------------------------------------------------
 
-const ADT_MCP_URL = process.env.ADT_MCP_URL || "http://localhost:2234/mcp";
-const ADT_MCP_TOKEN = (process.env.ADT_MCP_TOKEN || "").trim();
+// Seeded from the spawn environment, but LIVE: Java pushes an `adt_config`
+// stdin frame on the sidecar becoming ready and on every ADT MCP settings
+// change, so a token that was absent or stale at spawn is corrected without a
+// process restart (see applyAdtConfig / Section 9). Not const for that reason.
+let ADT_MCP_URL = process.env.ADT_MCP_URL || "http://localhost:2234/mcp";
+let ADT_MCP_TOKEN = (process.env.ADT_MCP_TOKEN || "").trim();
 const UI_TOKEN = (process.env.UI_TOKEN || "").trim();
 const DEV_ALLOWLIST = process.env.DEV_ALLOWLIST || "";
 const CLAUDE_CWD = process.env.CLAUDE_CWD || process.cwd();
 const UI_DIR = process.env.UI_DIR || "";
 
-const VALID_WS_MODES = ["default", "acceptEdits", "plan"] as const;
+// Uploaded files are materialised to disk in the session workspace so the
+// agent consumes them with its native Read tool (images/PDF/text), exactly as
+// a real Claude Code session would with a referenced path. Kept in step with
+// the UI's ALLOWED_FILE_EXT and MAX_FILE_BYTES.
+const UPLOADS_ROOT = path.join(CLAUDE_CWD, ".claude-uploads");
+const MAX_ATTACH_BYTES = 25 * 1024 * 1024; // per file
+const MAX_ATTACH_TOTAL_BYTES = 100 * 1024 * 1024; // per message, safety cap
+const ALLOWED_ATTACH_EXT = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
+  ".pdf",
+  ".md", ".markdown", ".txt", ".text", ".csv", ".tsv", ".json", ".log", ".xml", ".yaml", ".yml",
+  // Office formats — Read cannot open these; the sidecar extracts text on ingest
+  // (Excel via xlsx/SheetJS → CSV, Word via mammoth → text), mirroring Desktop.
+  ".xlsx", ".xlsm", ".xls", ".docx",
+]);
+// Subset of the above that needs text extraction before the agent can read it.
+const OFFICE_EXT = new Set([".xlsx", ".xlsm", ".xls", ".docx"]);
+
+const VALID_WS_MODES = [
+  "default",
+  "auto",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+] as const;
 type WsPermissionMode = (typeof VALID_WS_MODES)[number];
 function asWsPermissionMode(v: unknown): WsPermissionMode | null {
   return VALID_WS_MODES.includes(v as WsPermissionMode)
@@ -263,6 +291,36 @@ interface PermissionReply {
 const pendingPermissions = new Map<string, (r: PermissionReply) => void>();
 
 const canUseTool: CanUseTool = (toolName, input, { signal }) => {
+  // AskUserQuestion is resolved entirely through this permission callback: the
+  // CLI's built-in tool reads the chosen option(s) back out of its OWN input
+  // (`input.answers`, keyed by question text), which is delivered via the
+  // `updatedInput` we return here. Auto-allowing with the input UNCHANGED (the
+  // old behaviour) left `answers` absent, so the tool reported "The user did
+  // not answer the questions." The `permission_ask_user_question`
+  // request_user_dialog is the CLI's own REPL path and is never emitted to an
+  // SDK host, so onUserDialog below never fires — we render the picker here.
+  if (toolName === "AskUserQuestion") {
+    if (!uiSocket || uiSocket.readyState !== WebSocket.OPEN) {
+      // No panel to ask; allow unchanged so the tool degrades to "no answer"
+      // rather than blocking the turn.
+      return Promise.resolve<PermissionResult>({ behavior: "allow", updatedInput: input });
+    }
+    return askQuestionsViaUi(input, signal).then((raw) => {
+      if (raw === null) {
+        return { behavior: "deny", message: "User declined to answer the questions." };
+      }
+      // Mirror the CLI's own shape: single-select -> the bare label string,
+      // multi-select -> the array of labels. Keyed by question text.
+      const answers: Record<string, string | string[]> = {};
+      for (const [q, labels] of Object.entries(raw)) {
+        answers[q] = labels.length === 1 ? labels[0] : labels;
+      }
+      return {
+        behavior: "allow",
+        updatedInput: { ...(input as Record<string, unknown>), answers },
+      };
+    });
+  }
   if (alwaysAllow.has(toolName)) {
     return Promise.resolve<PermissionResult>({ behavior: "allow", updatedInput: input });
   }
@@ -308,6 +366,68 @@ function resolvePermissionResponse(msg: Record<string, unknown>): void {
     behavior: msg.behavior === "allow" ? "allow" : "deny",
     always: msg.always === true,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Section 6b: AskUserQuestion round-trip (canUseTool <-> UI question cards)
+// ---------------------------------------------------------------------------
+
+// AskUserQuestion is delivered to an SDK host purely through canUseTool (see
+// Section 6): the CLI never emits the `permission_ask_user_question`
+// request_user_dialog to an out-of-process consumer, so the onUserDialog path
+// below is retained only as a harmless fallback should a future CLI wire it up.
+// The live path is askQuestionsViaUi(), called from canUseTool.
+
+let questionSeq = 0;
+// Resolves with the chosen option label(s) per question ({ [question]: string[] }),
+// or null if the user cancelled / the panel disconnected.
+const pendingQuestions = new Map<string, (answers: Record<string, string[]> | null) => void>();
+
+// Render the multiple-choice picker in the chat panel and await the user's
+// selection. `input` is the AskUserQuestion tool input ({ questions: [...] });
+// the UI's extractQuestions() reads `payload.questions` directly.
+function askQuestionsViaUi(
+  input: unknown,
+  signal: AbortSignal
+): Promise<Record<string, string[]> | null> {
+  const id = `ask-${++questionSeq}`;
+  return new Promise((resolve) => {
+    pendingQuestions.set(id, (answers) => {
+      pendingQuestions.delete(id);
+      resolve(answers);
+    });
+    signal.addEventListener(
+      "abort",
+      () => {
+        if (pendingQuestions.delete(id)) resolve(null);
+      },
+      { once: true }
+    );
+    sendToUi({ type: "question_request", id, payload: input });
+  });
+}
+
+function resolveQuestionResponse(msg: Record<string, unknown>): void {
+  const id = typeof msg.id === "string" ? msg.id : null;
+  if (!id) return;
+  const fn = pendingQuestions.get(id);
+  if (!fn) {
+    log(`question_response for unknown id '${id}' — ignored`);
+    return;
+  }
+  if (msg.cancelled === true) {
+    fn(null);
+    return;
+  }
+  // The UI sends { answers: { [questionText]: string[] } } — the chosen option
+  // label(s) per question. Normalise to string[] and hand back raw; the caller
+  // (canUseTool) folds single-select answers to a bare string for the tool.
+  const rawAnswers = (msg.answers ?? {}) as Record<string, unknown>;
+  const answers: Record<string, string[]> = {};
+  for (const [q, labels] of Object.entries(rawAnswers)) {
+    answers[q] = Array.isArray(labels) ? labels.map((x) => String(x)) : [String(labels)];
+  }
+  fn(answers);
 }
 
 // ---------------------------------------------------------------------------
@@ -400,7 +520,11 @@ const ABAP_WORKFLOW_GUIDANCE =
   "operations. Never guess ABAP signatures, types, or interfaces — read the relevant " +
   "source with read_source (or the sap-adt tools) before writing any code.";
 
-function buildOptions(): Options {
+// Built from the LIVE ADT URL/token so it can be re-applied to a running query
+// via Query.setMcpServers when the token changes (see applyAdtConfig). Always
+// includes the in-process bridge; setMcpServers replaces the whole dynamic set,
+// so the bridge must be present on every rebuild or it would be disconnected.
+function buildMcpServers(): Record<string, McpServerConfig> {
   const mcpServers: Record<string, McpServerConfig> = {
     "adt-bridge": buildBridgeServer(),
   };
@@ -413,6 +537,11 @@ function buildOptions(): Options {
       headers: { Authorization: `Bearer ${ADT_MCP_TOKEN}` },
     };
   }
+  return mcpServers;
+}
+
+function buildOptions(): Options {
+  const mcpServers = buildMcpServers();
   const options: Options = {
     systemPrompt: {
       type: "preset",
@@ -425,12 +554,25 @@ function buildOptions(): Options {
     // .claude/settings hooks, .claude/agents subagents, and skills from the
     // user/project/local setting tiers.
     settingSources: ["user", "project", "local"],
+    // Force AskUserQuestion onto the "ask" permission path in every mode. An
+    // explicit ask-rule outranks the auto-mode classifier (decision_reason_type
+    // rule > classifier), so the tool's answers always round-trip through
+    // canUseTool instead of being auto-allowed with no selection. This flag tier
+    // sits above user/project/local and permission rules union across tiers, so
+    // it adds to — never replaces — the user's own rules. (bypassPermissions
+    // still skips all checks; the picker is unavailable there by design.)
+    settings: { permissions: { ask: ["AskUserQuestion"] } },
     permissionMode,
+    // Required by the SDK before permissionMode "bypassPermissions" is honoured;
+    // the actual mode is still user-selected in the UI dropdown.
+    allowDangerouslySkipPermissions: true,
     mcpServers,
     allowedTools: [
       "mcp__adt-bridge__read_source",
       "mcp__adt-bridge__get_editor_context",
     ],
+    // canUseTool also renders AskUserQuestion's multiple-choice picker (via
+    // askQuestionsViaUi) and returns the selection through updatedInput.answers.
     canUseTool,
     stderr: (data: string) => process.stderr.write(data),
   };
@@ -688,9 +830,12 @@ async function pollMcpStatus(q: Query): Promise<void> {
       adtMcp: { connected },
       model: currentModel,
     });
+    // Any non-connected terminal-ish state is worth a reconnect: the ADT HTTP
+    // server may have come up after us, or auth may have settled. 'pending' is
+    // the transient connecting state, so leave it alone to avoid churn.
     if (
       sap &&
-      (sap.status === "failed" || sap.status === "disabled") &&
+      (sap.status === "failed" || sap.status === "disabled" || sap.status === "needs-auth") &&
       typeof q.reconnectMcpServer === "function" &&
       activeQuery === q
     ) {
@@ -702,6 +847,42 @@ async function pollMcpStatus(q: Query): Promise<void> {
   } catch (e) {
     log("mcpServerStatus() failed:", e);
   }
+}
+
+/**
+ * Live-apply an ADT MCP config pushed from Java (url/token). Corrects a token
+ * that was empty or stale at spawn without restarting the process: updates the
+ * mutable url/token and, if the effective config changed while a query is live,
+ * re-registers sap-adt-mcp via Query.setMcpServers (which reconnects the server
+ * with the fresh Bearer token and keeps the in-process bridge). A short re-poll
+ * settles the status dot within seconds rather than at the next 20s tick.
+ */
+async function applyAdtConfig(url: string, token: string): Promise<void> {
+  const nextUrl = url.trim() || ADT_MCP_URL;
+  const nextToken = token.trim();
+  if (nextUrl === ADT_MCP_URL && nextToken === ADT_MCP_TOKEN) {
+    return; // no change — avoid needless reconnect churn
+  }
+  ADT_MCP_URL = nextUrl;
+  ADT_MCP_TOKEN = nextToken;
+  log(`adt_config applied: url=${ADT_MCP_URL} token=${ADT_MCP_TOKEN ? "present" : "(none)"}`);
+  const q = activeQuery;
+  if (!q || typeof q.setMcpServers !== "function") {
+    // No live query yet (or SDK too old): the new values are used the next
+    // time a query is built. Not connected until a query exists and polls.
+    adtConnected = ADT_MCP_TOKEN ? null : false;
+    sendToUi({ type: "status", adtMcp: { connected: false }, model: currentModel });
+    return;
+  }
+  try {
+    const result = await q.setMcpServers(buildMcpServers());
+    if (result && result.errors && result.errors["sap-adt-mcp"]) {
+      log("setMcpServers reported sap-adt-mcp error:", result.errors["sap-adt-mcp"]);
+    }
+  } catch (e) {
+    log("setMcpServers failed:", e);
+  }
+  if (activeQuery === q) void pollMcpStatus(q);
 }
 
 // ---------------------------------------------------------------------------
@@ -773,13 +954,187 @@ function formatContextBlock(context: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
-function handleUserMessage(msg: Record<string, unknown>): void {
-  const text = typeof msg.text === "string" ? msg.text : "";
-  if (!text.trim()) return;
-  let prompt = text;
-  if (msg.context !== null && msg.context !== undefined && typeof msg.context === "object") {
-    prompt = formatContextBlock(msg.context as Record<string, unknown>) + "\n\n" + text;
+interface SavedAttachment {
+  path: string; // the path the agent should Read (extracted text for Office files)
+  originalPath: string; // the raw uploaded file as written to disk
+  name: string; // display name (original filename)
+  size: number;
+  mime: string;
+  note?: string; // set when path is an extracted-text sibling, e.g. "Excel → CSV"
+}
+
+// basename only, non-safe chars collapsed, leading dots stripped: prevents path
+// traversal (../, absolute paths) and keeps the on-disk name predictable.
+function sanitiseFilename(name: string): string {
+  const base = path.basename(String(name || "file"));
+  const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "");
+  return cleaned || "file";
+}
+
+// Extract text from Excel/Word into a sibling file the Read tool can consume.
+// Both libraries are externalised and vendored into sidecar/node_modules;
+// imported lazily so a session that never uploads Office files pays nothing.
+async function convertOfficeToText(
+  buf: Buffer,
+  srcPath: string,
+  ext: string
+): Promise<{ path: string; note: string } | null> {
+  try {
+    if (ext === ".xlsx" || ext === ".xlsm" || ext === ".xls") {
+      // Read from the buffer (XLSX.readFile's fs binding is unreliable under
+      // the bundled/externalised interop; XLSX.read on a Buffer is portable).
+      const XLSX = await import("xlsx");
+      const wb = XLSX.read(buf, { type: "buffer" });
+      const parts: string[] = [];
+      for (const sheetName of wb.SheetNames) {
+        const sheet = wb.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        parts.push(`# Sheet: ${sheetName}\n\n${csv}`);
+      }
+      const out = srcPath + ".extracted.md";
+      fs.writeFileSync(out, parts.join("\n\n") || "(empty workbook)");
+      return { path: out, note: "Excel → CSV text" };
+    }
+    if (ext === ".docx") {
+      const mammoth = await import("mammoth");
+      const result = await mammoth.extractRawText({ buffer: buf });
+      const out = srcPath + ".extracted.md";
+      fs.writeFileSync(out, result.value || "(empty document)");
+      return { path: out, note: "Word → text" };
+    }
+  } catch (e) {
+    log("office conversion failed:", srcPath, e);
+    return null;
   }
+  return null;
+}
+
+async function materialiseAttachments(raw: unknown): Promise<{
+  saved: SavedAttachment[];
+  errors: string[];
+}> {
+  const saved: SavedAttachment[] = [];
+  const errors: string[] = [];
+  if (!Array.isArray(raw) || raw.length === 0) return { saved, errors };
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const dir = path.join(UPLOADS_ROOT, stamp);
+  let total = 0;
+
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const a = item as Record<string, unknown>;
+    const name = typeof a.name === "string" ? a.name : "file";
+    const b64 = typeof a.dataBase64 === "string" ? a.dataBase64 : "";
+    if (!b64) {
+      errors.push(`${name}: empty`);
+      continue;
+    }
+    const safe = sanitiseFilename(name);
+    const ext = path.extname(safe).toLowerCase();
+    if (!ALLOWED_ATTACH_EXT.has(ext)) {
+      errors.push(`${name}: type ${ext || "(none)"} not supported`);
+      continue;
+    }
+    let buf: Buffer;
+    try {
+      buf = Buffer.from(b64, "base64");
+    } catch {
+      errors.push(`${name}: could not decode`);
+      continue;
+    }
+    if (buf.length > MAX_ATTACH_BYTES) {
+      errors.push(`${name}: over ${Math.round(MAX_ATTACH_BYTES / (1024 * 1024))} MB`);
+      continue;
+    }
+    total += buf.length;
+    if (total > MAX_ATTACH_TOTAL_BYTES) {
+      errors.push(`${name}: message upload size exceeded`);
+      break;
+    }
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      let dest = path.join(dir, safe);
+      const stem = path.basename(safe, ext);
+      let n = 1;
+      while (fs.existsSync(dest)) {
+        dest = path.join(dir, `${stem}-${n}${ext}`);
+        n++;
+      }
+      fs.writeFileSync(dest, buf);
+
+      let readPath = dest;
+      let note: string | undefined;
+      if (OFFICE_EXT.has(ext)) {
+        const converted = await convertOfficeToText(buf, dest, ext);
+        if (converted) {
+          readPath = converted.path;
+          note = converted.note;
+        } else {
+          errors.push(`${path.basename(dest)}: stored but text extraction failed`);
+        }
+      }
+
+      saved.push({
+        path: readPath,
+        originalPath: dest,
+        name: path.basename(dest),
+        size: buf.length,
+        mime: typeof a.mime === "string" ? a.mime : "",
+        note,
+      });
+    } catch (e) {
+      errors.push(`${name}: write failed`);
+      log("attachment write failed:", e);
+    }
+  }
+  return { saved, errors };
+}
+
+function cleanupUploads(): void {
+  try {
+    fs.rmSync(UPLOADS_ROOT, { recursive: true, force: true });
+  } catch (e) {
+    log("uploads cleanup failed:", e);
+  }
+}
+
+function formatAttachmentsBlock(saved: SavedAttachment[]): string {
+  const lines = [
+    "[Attached files — saved to the session workspace; read them with the Read tool]",
+  ];
+  for (const f of saved) {
+    const kb = Math.max(1, Math.round(f.size / 1024));
+    if (f.note) {
+      lines.push(`- ${f.path} (${f.note} extracted from ${f.name}, original ${kb} KB)`);
+    } else {
+      lines.push(`- ${f.path} (${f.mime || "unknown type"}, ${kb} KB)`);
+    }
+  }
+  return lines.join("\n");
+}
+
+async function handleUserMessage(msg: Record<string, unknown>): Promise<void> {
+  const text = typeof msg.text === "string" ? msg.text : "";
+  const { saved, errors } = await materialiseAttachments(msg.attachments);
+  if (errors.length) {
+    sendToUi({
+      type: "error",
+      message: "Some attachments were rejected: " + errors.join("; "),
+    });
+  }
+  if (!text.trim() && saved.length === 0) return;
+
+  const parts: string[] = [];
+  if (msg.context !== null && msg.context !== undefined && typeof msg.context === "object") {
+    parts.push(formatContextBlock(msg.context as Record<string, unknown>));
+  }
+  if (saved.length > 0) {
+    parts.push(formatAttachmentsBlock(saved));
+  }
+  if (text) parts.push(text);
+  const prompt = parts.join("\n\n");
+
   ensureQuery();
   if (!activeQueue) {
     sendToUi({ type: "error", message: "Claude session is not available; try New Session." });
@@ -805,10 +1160,16 @@ function handleWsMessage(raw: string): void {
   }
   switch (msg.type) {
     case "user_message":
-      handleUserMessage(msg);
+      handleUserMessage(msg).catch((e: unknown) => {
+        log("handleUserMessage failed:", e);
+        sendToUi({ type: "error", message: "Failed to process the message or its attachments." });
+      });
       break;
     case "permission_response":
       resolvePermissionResponse(msg);
+      break;
+    case "question_response":
+      resolveQuestionResponse(msg);
       break;
     case "interrupt":
       if (activeQuery) {
@@ -821,6 +1182,7 @@ function handleWsMessage(raw: string): void {
       break;
     case "new_session":
       teardownQuery();
+      cleanupUploads();
       resumeOnNext = false;
       currentModel = null;
       sendReadyFrame();
@@ -1066,6 +1428,13 @@ function startStdinReader(): void {
           // Forward verbatim to the UI (it renders an attach-chip).
           sendToUi(frame);
           break;
+        case "adt_config": {
+          // Live ADT MCP url/token push from Java (ready + on settings change).
+          const url = typeof frame.url === "string" ? frame.url : "";
+          const token = typeof frame.token === "string" ? frame.token : "";
+          void applyAdtConfig(url, token);
+          break;
+        }
         case "shutdown":
           log("shutdown frame received — exiting");
           gracefulExit(0);
