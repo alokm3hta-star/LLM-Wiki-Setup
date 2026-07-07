@@ -1,0 +1,79 @@
+{
+  "global": {
+    "files": "/src/**/*.*",
+    "skipGeneratedFunctionGroups": true,
+    "skipGeneratedGatewayClasses": true,
+    "skipGeneratedPersistentClasses": true
+  },
+  "syntax": {
+    "version": "v758",
+    "errorNamespace": "^(Z|Y)"
+  },
+  "rules": {
+    "check_syntax": true,
+    "parser_error": true,
+    "parser_bad_exceptions": true,
+    "ambiguous_statement": true,
+    "unknown_types": true,
+    "check_ddic": true,
+    "implement_methods": true,
+    "forbidden_void_type": false,
+
+    "use_class_based_exceptions": true,
+    "prefer_raise_exception_new": true,
+    "prefer_returning_to_exporting": true,
+    "mix_returning": true,
+    "omit_receiving": true,
+    "check_subrc": true,
+    "functional_writing": true,
+    "reduce_procedural_code": true,
+    "constructor_visibility_public": true,
+    "no_public_attributes": true,
+    "use_new": true,
+    "prefer_is_not": true,
+    "no_yoda_conditions": true,
+    "exit_or_check": true,
+    "unnecessary_return": true,
+
+    "obsolete_statement": true,
+    "form_tables_obsolete": true,
+    "fm_global_parameters_obsolete": true,
+    "avoid_use": {
+      "define": true,
+      "statics": true,
+      "defaultKey": true,
+      "break": true,
+      "testSeams": true,
+      "describeLines": false,
+      "exportToMemory": true,
+      "exportToDatabase": true
+    },
+
+    "method_length": {
+      "statements": 20,
+      "errorWhenEmpty": true,
+      "ignoreTestClasses": true,
+      "checkForms": true,
+      "checkFunctionModules": true
+    },
+    "cyclomatic_complexity": { "max": 20 },
+    "nesting": { "depth": 4 },
+    "max_one_statement": true,
+
+    "object_naming": {
+      "clas": "^[ZY]",
+      "intf": "^[ZY]IF"
+    },
+    "allowed_object_naming": true,
+    "local_class_naming": true,
+    "local_variable_names": true,
+    "class_attribute_names": true,
+    "method_parameter_names": true,
+    "types_naming": true,
+
+    "add_test_attributes": true,
+    "local_testclass_consistency": true,
+
+    "no_prefixes": false
+  }
+}

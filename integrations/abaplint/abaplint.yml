@@ -1,0 +1,30 @@
+name: abaplint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege token. checks:write is what lets the action push
+# inline annotations back onto the PR via the Checks API.
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  lint:
+    name: abaplint (src/**)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run abaplint
+        uses: abaplint/actions-abaplint@main
+        # Fork PRs get a read-only GITHUB_TOKEN, so the Checks-API annotation
+        # push would fail. This guard SKIPS abaplint entirely on fork PRs.
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Optional: pin @abaplint/cli to a released version instead of the default @latest.
+        # with:
+        #   version: 'X.Y.Z'
