@@ -750,7 +750,7 @@ The wiki is maintained by a set of Python scripts. These are the automated backb
 
 ## 12. Integrations
 
-Two optional integrations extend the wiki beyond the terminal. Neither is required for the core system (ingestion, query, curation) to work; both live in `integrations/` and ship as sanitised templates you fill in locally.
+Three optional integrations sit around the wiki. None is required for the core system (ingestion, query, curation) to work; all live in `integrations/` and ship as sanitised templates you fill in locally.
 
 ### Eclipse plug-in: Claude Code for ABAP
 
@@ -761,6 +761,14 @@ A Joule-style Claude Code chat panel docked inside Eclipse/ADT, built as Paul's 
 **Security model:** fail-closed on a Dev-only project allowlist, so source read/write is refused unless the open editor resolves to an allowlisted Dev ABAP project; exactly three bridge tools (`read_source`, `write_source`, `get_editor_context`); the ADT MCP bearer token stays in workspace preferences and reaches the sidecar via environment variables only, never on the command line, in logs, or in the UI; the chat UI binds to `127.0.0.1` with a per-launch token; and there is no direct ADT REST access, so all persistence and activation route through ADT's own save pipeline.
 
 **Setup, in short:** build the update-site zip with `mvn clean verify` (or use a prebuilt one), install it via Eclipse's Install New Software wizard, then set your Dev system allowlist under Preferences → Claude Code for ABAP. Full build, install, configuration, and troubleshooting steps: [`integrations/claude-code-eclipse/README.md`](integrations/claude-code-eclipse/README.md). Governance and design rationale: [`docs/ADR-002-eclipse-editor-bridge.md`](integrations/claude-code-eclipse/docs/ADR-002-eclipse-editor-bridge.md).
+
+### abaplint: shift-left quality gate for ABAP
+
+A static-analysis gate that runs abaplint on every pull request of an abapGit-serialised ABAP repository, catching Clean ABAP and syntax issues on GitHub before the code is ever pulled into an SAP system. It needs no SAP system, no runtime, and no subscription; it reads the serialised `src/**` source directly and annotates its findings inline on the pull request. This is the shift-left companion to Paul's delivery track: where the Eclipse plug-in is Paul's in-system write path, this is the pre-merge check for the abapGit route. It is additive to the ABAP Test Cockpit (ATC), not a replacement, because abaplint catches Clean ABAP patterns that ATC covers only partly, earlier and for free.
+
+**Requirements:** a GitHub repository holding abapGit-serialised ABAP under `src/**`; GitHub Actions enabled (the default `GITHUB_TOKEN` is the only secret needed); no SAP connectivity. For the free path on private repositories, use the GitHub Action shipped here (it runs `@abaplint/cli` in your own workflow) rather than the hosted `abaplint.app` app, which is free for public repos but a paid subscription for private ones.
+
+**Setup, in short:** copy `abaplint.json` to your repo root and set `syntax.version` to your backend's SAP_BASIS release (the README carries the SAP_BASIS to S/4HANA mapping); copy `abaplint.yml` into your repository's `.github/workflows/`; open a pull request to see the inline findings; then require the "abaplint (src/**)" check in branch protection to turn it from advice into an enforced gate. Full config, version mapping, licensing and cost notes, and adaptation guidance: [`integrations/abaplint/README.md`](integrations/abaplint/README.md).
 
 ### n8n: WhatsApp to Alex
 
@@ -829,7 +837,8 @@ LLM Wiki/
 ├── Review/                      ← Design docs to review against the wiki
 │   └── README.md
 │
-├── integrations/                ← Optional bridges for Paul's live ADT MCP write path + Alex-over-WhatsApp
+├── integrations/                ← Optional bridges and gates around the core loop
+│   ├── abaplint/                ← Sanitised abaplint CI templates: shift-left Clean ABAP gate on the pull request
 │   ├── claude-code-eclipse/     ← Eclipse plug-in: Claude Code ↔ ADT-open editor, for SAP GUI/Eclipse ABAP workflows
 │   └── n8n/                     ← Sanitised n8n workflow template: WhatsApp → @alex ask
 │
