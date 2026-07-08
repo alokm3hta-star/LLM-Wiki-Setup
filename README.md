@@ -114,9 +114,18 @@ That covers the knowledge track. A second track runs in parallel for delivery: P
 │  [SAP] published docs → extraction request  │
 │  (never a guess)                            │
 └───────────────────┬────────────────────────┘
-        │  write path A (default): ADT MCP Server (ABAP/RAP, Dev only) or local repo (CAP)
-        │  write path B (bounded, opt-in): abapGit-serialised + abaplint CI, for MCP-absent estates
-        ▼
+                    │  write path (explicit; never a silent swap)
+           ┌────────┴────────────────────┐
+           ▼                             ▼
+┌──────────────────────┐  ┌────────────────────────────┐
+│ Path A (default)     │  │ Path B (bounded, opt-in)   │
+│ ADT MCP Server, Dev  │  │ abapGit-serialised src +   │
+│ only; in-system ABAP │  │ abaplint CI on the PR;     │
+│ Unit / ATC / activate│  │ no MCP; in-system verify   │
+│ (or local repo, CAP) │  │ PENDING a human pull       │
+└──────────┬───────────┘  └──────────────┬─────────────┘
+           └────────┬────────────────────┘
+                    ▼
 ┌────────────────────────────────────────────┐
 │  External code workspace                    │
 │  Test-first ABAP/RAP/CAP; never wiki/pages/ │
