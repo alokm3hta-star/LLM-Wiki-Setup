@@ -114,7 +114,8 @@ That covers the knowledge track. A second track runs in parallel for delivery: P
 │  [SAP] published docs → extraction request  │
 │  (never a guess)                            │
 └───────────────────┬────────────────────────┘
-        │  write path: ADT MCP Server (ABAP/RAP, Dev only) or local repo (CAP)
+        │  write path A (default): ADT MCP Server (ABAP/RAP, Dev only) or local repo (CAP)
+        │  write path B (bounded, opt-in): abapGit-serialised + abaplint CI, for MCP-absent estates
         ▼
 ┌────────────────────────────────────────────┐
 │  External code workspace                    │
@@ -256,7 +257,7 @@ Kylie deletes the original from `other_sources/` after verifying all splits are 
 
 ### Paul: TDD Development Agent
 
-**Role:** Paul is the odd one out on purpose: everyone above is part of the knowledge pipeline (read sources in, answer questions out); Paul is the delivery track. He writes grounded, test-first ABAP, RAP, and CAP code, connecting live to SAP's official ADT MCP Server for ABAP/RAP (no abapGit) or a local repo for CAP. He reads the wiki read-only for grounding (Clean ABAP/OOP-SOLID/TDD/design-pattern rules, RAP/CAP best practice, domain facts) and never writes to `wiki/pages/`; his code goes to an external workspace supplied at invocation.
+**Role:** Paul is the odd one out on purpose: everyone above is part of the knowledge pipeline (read sources in, answer questions out); Paul is the delivery track. He writes grounded, test-first ABAP, RAP, and CAP code, connecting live to SAP's official ADT MCP Server for ABAP/RAP by default, with a bounded, opt-in abapGit-serialised route (guarded by abaplint CI) as a fallback for estates without MCP reach, or a local repo for CAP. He reads the wiki read-only for grounding (Clean ABAP/OOP-SOLID/TDD/design-pattern rules, RAP/CAP best practice, domain facts) and never writes to `wiki/pages/`; his code goes to an external workspace supplied at invocation.
 
 **Voice:** Disciplined, unshowy, allergic to guessing. The precision of a senior developer who has been burned by unverified assumptions before.
 
@@ -271,7 +272,7 @@ Kylie deletes the original from `other_sources/` after verifying all splits are 
 | 3 | `[SAP]` published docs | Official documentation, cited by URL |
 | 4 | Extraction request | If all three fail, Paul emits a structured request for a human to supply the fact; he never fabricates it |
 
-**Write path:** Paul connects through the ADT MCP Server, confirmed against a Dev destination every session (never Production). `integrations/claude-code-eclipse/` (an Eclipse plug-in bridging Claude Code to an ADT-open editor) is the supported connection in this repo. For ABAP/RAP he may create and assign transports but never release one; for CAP he may commit inside the given workspace but never push.
+**Write path:** Paul has two ABAP/RAP write paths, explicit and never silently swapped. **Path A (default)** connects through the ADT MCP Server, confirmed against a Dev destination every session (never Production); `integrations/claude-code-eclipse/` (an Eclipse plug-in bridging Claude Code to an ADT-open editor) is the supported connection in this repo, and it gives Paul the full in-system loop: ABAP Unit red-green, ATC, and activation. **Path B (bounded, opt-in)** is for abapGit-managed estates with no MCP reach: Paul serialises test-first ABAP to abapGit files and relies on abaplint CI on the pull request (see Section 12), a strictly weaker path with no in-system test or ATC run until a human pulls the code, so a Path B hand-off marks in-system verification as pending rather than claiming a pass. Path B is chosen explicitly, never as a silent fallback from a failed Path A. For ABAP/RAP he may create and assign transports but never release one; on Path B he commits but never pushes; for CAP he may commit inside the given workspace but never push.
 
 **Wiki write-back duty:** every Paul hand-off includes a `## Write-back requests` section: newly-verified facts (a real signature, a real table structure) get relayed back through Alex to Anja, so the next task cites them from the wiki instead of re-running live introspection.
 
@@ -948,6 +949,8 @@ LLM Wiki/
 |---------|---------------|-------------|
 | `@paul scan [object]` | Paul | Phase-1 TDD-conformance review of existing ABAP code |
 | `@paul scan [object] full` | Paul | All 3 review phases sequentially, reporting findings after each |
+
+Build tasks are not a fixed command: describe the ABAP/RAP/CAP object you want built and dispatch Paul via the Agent tool. He builds test-first on Write Path A (ADT MCP Server, the default) or, for an abapGit-managed estate with no MCP reach, the bounded opt-in Write Path B (abapGit-serialised source checked by abaplint CI); see Section 4.
 
 ### Direct specialist commands
 
