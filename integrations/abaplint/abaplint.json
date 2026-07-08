@@ -6,7 +6,7 @@
     "skipGeneratedPersistentClasses": true
   },
   "syntax": {
-    "version": "v758",
+    "version": "v816",
     "errorNamespace": "^(Z|Y)"
   },
   "rules": {

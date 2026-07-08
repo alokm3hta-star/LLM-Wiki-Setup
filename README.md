@@ -2,6 +2,16 @@
 
 A living, grounded SAP knowledge base powered by a team of specialised AI agents running inside Claude Code. Feed it your documents; ask it anything; trust every answer because every answer is cited.
 
+## The Series
+
+This project, and the thinking behind it, is documented in a five-part series:
+
+- [Part 1: I built an AI that refuses to guess](https://www.linkedin.com/pulse/part-1-i-built-ai-refuses-guess-alok-mehta-epdue/)
+- [Part 2: Seven AI agents and the harness that keeps them honest](https://www.linkedin.com/pulse/seven-ai-agents-harness-keeps-them-honest-alok-mehta-7nnye/)
+- [Part 3: Texting my SAP knowledge base on WhatsApp](https://www.linkedin.com/pulse/part-3-texting-my-sap-knowledge-base-whatsapp-alok-mehta-rab4e/)
+- [Part 4: I asked it for ABAP, and it refused to guess the BAPI](https://www.linkedin.com/pulse/part-4-i-asked-abap-refused-guess-bapi-alok-mehta-bbs1e/)
+- [Part 5: Did anyone ask Joule for on-premises? I built the add-on that does similar](https://www.linkedin.com/pulse/part-5-did-anyone-ask-joule-on-premises-i-built-add-on-alok-mehta-8s97e/)
+
 ---
 
 ## Table of Contents
@@ -1049,3 +1059,125 @@ This starter kit is one concrete instantiation of that pattern, specialised for 
 ---
 
 *This starter kit includes the complete agent team, all scripts, all cluster definitions, and all operational files, all reset to zero. The knowledge comes from you.*
+
+
+---
+
+## Model Tiering in a Multi-Agent Grounded Knowledge Base: A Three-Way Benchmark
+
+A like-for-like comparison of three model configurations answering one identical query through the same multi-agent orchestration framework. The framework routes a user question to an orchestrator (Alex), which fans the work out to specialist sub-agents (a technical validator and a governance reviewer) running in parallel, then synthesises one grounded, cited answer. Only the model tier assigned to the sub-agents changes between runs.
+
+### Executive summary
+
+- **Cost:** the tiered configuration cost roughly half of either full-strength configuration. Moving the full-strength run from the mid tier to the top tier did **not** save money: the top tier used ~38% fewer tokens but its higher per-token price cancelled the saving almost exactly, landing within ~3%.
+- **Quality:** both full-strength configurations produced clean, publishable answers with zero factual errors. The tiered configuration, as delivered, produced an answer with two outright errors, one ungrounded claim, and three material omissions.
+- **Interpreting the tiered result:** the cost saving is real, but it is concentrated on narrow, single-dimension query classes where a lighter agent can safely carry the load. A mixed technical-and-governance query like this one should run at full strength on both lenses; the tiered errors here reflect a lighter model being asked to carry a governance judgement beyond its competence, not a saving that comes for free.
+
+### Test setup
+
+| Property | Value |
+|---|---|
+| Query | A single real query drawn from the knowledge base, combining a technical-feasibility question with a governance dimension |
+| Query class | Mixed technical-and-governance (the class most sensitive to model tiering, because it needs both precise retrieval and sound judgement) |
+| Sub-agents dispatched | Technical validator + governance reviewer, run in parallel |
+| Runs | (1) Tiered: mid-tier technical validator + light-tier governance reviewer; (2) Full mid-tier: both agents mid tier; (3) Full top-tier: both agents top tier |
+| Variable changed | Sub-agent model tier only; branch, query, and dispatch pattern held constant where possible |
+| Verification method | Every distinctive claim in each answer independently fact-checked against the knowledge base pages, verdict CORRECT / WRONG / UNGROUNDED / PARTIAL with quoted evidence |
+
+Model tiers are referred to as **top**, **mid**, and **light** throughout, mapped to their published prices in the pricing reference table below.
+
+### 1. Processing time per agent
+
+Agents run in parallel, so the wall-clock time is approximately the slowest agent plus orchestrator synthesis, not the sum of both agents.
+
+| Configuration | Technical validator (s) | Governance reviewer (s) | Slowest agent (s) | Sum of agent time (s) | Wall-clock |
+|---|---|---|---|---|---|
+| Tiered (mid + light) | 118.7 | 54.9 | 118.7 | 173.6 | ~2m 25s |
+| Full mid-tier | 201.2 | 198.8 | 201.2 | 400.0 | ~3m 44s |
+| Full top-tier | 141.1 | 159.4 | 159.4 | 300.5 | ~4m 04s* |
+
+*The top-tier run's wall-clock window is not clean: it included a framework boot sequence and a re-dispatch between the start and end timestamps. The per-agent durations are the reliable figures; on those, the top tier was faster per agent than the mid tier (159.4s slowest vs 201.2s).
+
+### 2. Actual token usage
+
+Figures are total tokens per sub-agent as reported by each agent's own usage block. The orchestrator's own synthesis and the framework boot are not instrumented in two of the three runs and sit on top of every figure below, roughly constant across runs.
+
+| Configuration | Technical validator (tier / tokens) | Governance reviewer (tier / tokens) | Total tokens | Tool calls (total) |
+|---|---|---|---|---|
+| Tiered | mid / 87,030 | light / 38,733 | 125,763 | 25 |
+| Full mid-tier | mid / 96,303 | mid / 103,698 | 200,001 | 41 |
+| Full top-tier | top / 58,683 | top / 64,562 | 123,245 | 17 |
+
+### 3. Sonnet-token equivalents (tier-normalised cost units)
+
+Because each tier is priced at a fixed multiple of the mid tier on **both** input and output (top = 5/3× mid; light = 1/3× mid), the per-token cost ratio between tiers is independent of the input/output split and of any cache discount. Normalising every run to mid-tier-equivalent tokens therefore gives a split-independent, cache-independent cost comparison.
+
+| Configuration | Calculation | Mid-tier-equivalent tokens | Relative to mid-tier baseline |
+|---|---|---|---|
+| Tiered | 87,030 + (38,733 × 1/3) | 99,941 | 50.0% |
+| Full mid-tier | 96,303 + 103,698 | 200,001 | 100% (baseline) |
+| Full top-tier | 123,245 × 5/3 | 205,408 | 102.7% |
+
+**Read-out:** the tiered run costs exactly half of either full run; the top-tier run costs ~3% more than the mid-tier run despite using fewer raw tokens. These two facts hold under any assumption about the token mix or caching.
+
+### 4. Cost in USD (as if billed via API)
+
+#### Pricing reference (published per-MTok rates)
+
+| Tier | Input ($/MTok) | Output ($/MTok) | Ratio to mid tier |
+|---|---|---|---|
+| Top | 5.00 | 25.00 | 5/3× on both |
+| Mid | 3.00 | 15.00 | baseline |
+| Light | 1.00 | 5.00 | 1/3× on both |
+
+#### Estimated cost
+
+Read-heavy agents (each made 8 to 21 tool calls fetching pages), so input dominates. The estimate below assumes a 90% input / 10% output mix at sticker pricing with no cache discount, giving blended rates of top $7.00, mid $4.20, light $1.40 per MTok. A tighter 95/5 mix gives the lower end of each range.
+
+| Configuration | Technical validator ($) | Governance reviewer ($) | Total ($) | Range (95/5 to 90/10) | Relative |
+|---|---|---|---|---|---|
+| Tiered | 0.37 | 0.05 | **0.42** | 0.36 to 0.42 | 0.50× |
+| Full mid-tier | 0.40 | 0.44 | **0.84** | 0.72 to 0.84 | 1.00× |
+| Full top-tier | 0.41 | 0.45 | **0.86** | 0.74 to 0.86 | 1.03× |
+
+**Caveats on the absolute figures:** (1) prompt caching typically discounts the compounding input at ~0.1×, so real billed cost is likely one-third to one-half of these numbers; but caching scales all three runs down proportionally, so the ratios are unaffected. (2) These are sub-agent costs only; the orchestrator's synthesis adds a roughly constant amount to each run. The decision-relevant facts are the **2× gap** between the tiered and full runs and the **near-parity** between the top and mid full runs, both of which are robust.
+
+### 5. Quality
+
+Every distinctive claim in each answer was independently verified against the knowledge base pages.
+
+| Dimension | Tiered | Full mid-tier | Full top-tier |
+|---|---|---|---|
+| Outright wrong claims | 2 | 0 | 0 |
+| Ungrounded claims (asserting a negative from a single lookup) | 1 | 0 | 0 |
+| Material omissions of documented facts | 3 | 0 | 0 |
+| Verified-correct distinctive claims | mixed / partial | 5 of 5 | 6 of 8 (2 soft spots, synthesis not error) |
+| Cited-source discipline | broke on 2 or more claims | intact | intact |
+| Safe to send to a stakeholder as written | **No** | Yes | Yes |
+| Distinctive strength | fastest and cheapest only | tightest verification record; carefully hedged inferences | added grounded governance context; every gap correctly labelled as out of scope |
+
+The two soft spots in the top-tier answer were synthesis (a plausible inference from enumerated facts, and one internally-inconsistent source flattened), not fabrication; the answer left both uncited or explicitly flagged, so neither is a factual error.
+
+### 6. Derived and efficiency stats
+
+| Metric | Tiered | Full mid-tier | Full top-tier |
+|---|---|---|---|
+| Wall-clock | ~2m 25s | ~3m 44s | ~4m 04s* |
+| Total tool calls | 25 | 41 | 17 |
+| Tokens per tool call | ~5,031 | ~4,878 | ~7,250 |
+| Defect count (wrong + ungrounded + omitted) | 6 | 0 | 0** |
+| Cost per client-ready answer | not applicable (answer not client-ready) | ~$0.84 | ~$0.86 |
+| Mid-tier-equivalent cost per verified-correct answer | infinite (no clean answer produced) | 200,001 units | 205,408 units |
+
+*Wall-clock window confounded by boot and re-dispatch; per-agent time is the clean measure.
+**Two synthesis soft spots, neither a factual error.
+
+**Reading the efficiency numbers:** the top tier reached a clean answer in the fewest tool calls (17) and fewest tokens of any clean run, indicating tighter retrieval rather than brute-force reading; it simply pays more per token. The tiered run's low cost is misleading in isolation because it did not buy a usable deliverable on this query.
+
+### Scope and reproducibility
+
+This is a single query at N=1 per configuration and a single query class; it is a directional benchmark, not a statistically powered study. Two of the three runs carried prompt confounds: the full mid-tier run's dispatch prompts were not recorded, and the top-tier run's dispatch prompts were composed after the mid-tier run's findings were already known, so a portion of the top tier's extra depth is prompt-inherited rather than purely model-driven. The wall-clock figure for the top-tier run is confounded by a boot sequence inside the timing window; per-agent durations are the reliable timing measure. To harden these findings, re-run each configuration at least three times per query class with dispatch prompts logged and orchestrator-level token instrumentation enabled.
+
+### Conclusion
+
+For open-ended queries that combine a technical and a governance dimension, model tiering offers **no quality or cost advantage**: the safe configuration assigns full strength to both the technical and the governance lens. The tiering win is real but confined to the classes the router can classify with high confidence: narrow lookups and clean single-dimension questions, where a lighter tier can safely carry the load. On answer quality alone the two full-strength configurations tie: the mid tier for the tightest verification record, the top tier for added grounded depth, at effectively equal cost. The one clear lesson that generalises: in a tiered multi-agent system, the highest-leverage investment is not the tier assignment but the enforcement and verification layer that guarantees the orchestrator honours its own routing and escalates when a lighter agent reaches beyond its competence.

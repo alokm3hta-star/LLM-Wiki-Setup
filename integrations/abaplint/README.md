@@ -29,7 +29,7 @@ This template deliberately uses the free Action path, so the gate costs nothing 
 
 1. Copy `abaplint.json` from this folder into the root of your abapGit repository.
 2. Copy `abaplint.yml` from this folder to `.github/workflows/abaplint.yml` in your repository. The copy in this kit is a template and is deliberately not placed at this kit's own active `.github/workflows/` path, so it never runs against the kit itself; it only becomes live once you copy it into your repo.
-3. Set `syntax.version` in `abaplint.json` to your backend's SAP_BASIS release (see the mapping table below). The template ships `v758` (S/4HANA 2023).
+3. Set `syntax.version` in `abaplint.json` to your backend's SAP_BASIS release (see the mapping table below). The template ships `v816` (S/4HANA 2025).
 4. Open a pull request. abaplint runs and annotates any findings inline.
 5. Make it a real gate. In your repository, go to Settings, then Branches, and add a branch protection rule that requires the "abaplint (src/**)" check to pass before merge. Without this the check is advisory only.
 
