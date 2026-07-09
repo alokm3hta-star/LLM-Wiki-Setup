@@ -1,0 +1,72 @@
+# Full abaplint workflow for a GREENFIELD repo (one with no CI yet). Drop this
+# in at .github/workflows/abaplint.yml. It carries BOTH gates:
+#   - lint          : abaplint static analysis over /src/**
+#   - offstack-aunit: transpiled off-stack ABAP Unit (needs: lint)
+#
+# If the repo ALREADY has an abaplint workflow, do NOT overwrite it with this —
+# merge only the off-stack job from github-offstack-aunit-job.yml beside the
+# existing lint job instead.
+name: abaplint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:   # allows `@paul test <repo> ci` to run the gate on demand for any branch
+
+# Least-privilege token. checks:write lets the action push inline annotations
+# back onto the PR via the Checks API. Drop pull-requests:write for strict least
+# privilege if no PR-comment step is added later.
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  lint:
+    name: abaplint (src/**)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Post inline annotations
+        uses: abaplint/actions-abaplint@main
+        # Fork PRs get a read-only GITHUB_TOKEN, so the Checks-API annotation
+        # push would fail. This guard SKIPS abaplint on fork PRs; only same-repo
+        # PRs and pushes run it.
+        if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # actions-abaplint never fails its own job (it exits 0 and posts a separate
+      # "results" check-run for annotations, which branch protection can't gate
+      # on). This step runs the CLI directly so the JOB fails on lint errors --
+      # THIS status ("abaplint (src/**)") is what branch protection should gate on.
+      - name: Enforce abaplint gate
+        run: npx --yes @abaplint/cli@latest
+
+  # Off-stack ABAP Unit: transpiles the ORCHESTRATION logic with the abaplint
+  # transpiler and runs the existing ABAP Unit tests on Node -- no live SAP
+  # system. Write-Path-B companion to the static gate, NOT a replacement for
+  # on-stack ATC/ABAP Unit. Scope boundary: the shimmed adapter class(es) are
+  # NOT reproduced off-stack and stay an on-stack concern. See
+  # test-offstack/README.md.
+  offstack-aunit:
+    name: off-stack ABAP Unit (orchestration)
+    runs-on: ubuntu-latest
+    # Static analysis first, then off-stack unit tests.
+    needs: lint
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install off-stack toolchain
+        working-directory: test-offstack
+        run: npm ci
+
+      - name: Run off-stack ABAP Unit (transpiled, pinned dialect)
+        working-directory: test-offstack
+        run: npm test

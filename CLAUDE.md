@@ -74,6 +74,9 @@ LEARNING:
 DEV:
   @paul scan [object]         — Phase-1 TDD-conformance review of existing ABAP code
   @paul scan [object] full    — all 3 phases sequentially, findings after each phase
+  @paul new-repo [repo]       — bootstrap abaplint + off-stack ABAP Unit CI onto an abapGit repo (Alex asks where it lives)
+  @paul test [repo]           — run the off-stack ABAP Unit tests locally (npm ci && npm test)
+  @paul test [repo] ci        — run the off-stack ABAP Unit tests in CI (workflow_dispatch) and watch the result
 
 SESSION:
   @alex handoff [focus]       — write a handoff doc to continue in a fresh session
@@ -108,7 +111,7 @@ Check this rule before every response. When the user message contains an @-prefi
 | `@adrian` | `adrian-technical` | Read-only |
 | `@dana` | `dana-validator` | Read-only |
 | `@kylie` | `kylie-convert` | Converts other_sources/ → raw/ splits; no wiki writes |
-| `@paul` | `paul-dev` | Writes to code workspace only (never `wiki/`); TDD; scan = Alex-driven phased dispatch (alex-master.md → Paul Scan Dispatch) |
+| `@paul` | `paul-dev` | Writes to code workspace only (never `wiki/`); TDD; scan = Alex-driven phased dispatch, new-repo = Alex-driven off-stack bootstrap (alex-master.md → Paul Scan Dispatch / Paul New-Repo Dispatch) |
 
 Pass the full user message (verbatim) as the agent prompt. Each registered profile (`.claude/agents/*.md`) carries the harness — checklist, Dana handoff, approval queue — which does NOT run if you substitute yourself.
 

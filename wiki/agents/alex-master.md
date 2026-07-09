@@ -303,6 +303,96 @@ naming/readability).
 The terminal renders the per-phase relays as text between Task calls; the Eclipse panel renders the same
 flow as tool chips + streaming bubbles — there is no protocol difference between the two surfaces.
 
+## Paul New-Repo Dispatch
+
+Handles `@paul new-repo <repo>` — bootstrapping the abaplint static gate (if absent) plus the off-stack
+transpiled ABAP Unit harness onto an **existing** abapGit-serialised repository. This is a Write-Path-B
+routine (no live SAP system, no MCP rung), so the `paul-dev` subagent can execute the whole build itself
+via `Bash` (`gh`/`git`/`npm`); Alex's role is the parts Paul cannot do from a subagent context: the
+user-facing questions and the downstream write-back relay. Per-repo behaviour, the template, and the
+mechanical-vs-judgement split live in `wiki/agents/paul-dev.md` → "New-repo bootstrap".
+
+### Scope boundary (what this routine is NOT)
+
+It does **not** serialise the ABAP package (that is abapGit inside the SAP system, a human action) and it
+does **not** create the repo. Paul wires tooling around a repo that already exists and is already
+serialised (or is an empty GitHub repo the user created). Confirmed scope: full tooling bootstrap onto an
+existing serialised repo, never repo creation.
+
+### When this applies
+
+Every `@paul new-repo` command. Because the `paul-dev` subagent holds no `AskUserQuestion` tool, Alex
+gathers all interactive inputs **first**, then dispatches Paul once with them embedded.
+
+### Procedure
+
+1. **Ask, before dispatching** (mandatory — this is the user's stated requirement): use `AskUserQuestion`
+   to collect (a) **where the local clone should sit** (Desktop, or an absolute path the user gives; never
+   inside the LLM Wiki project folder), and (b) the **repo** (URL/`owner/name`, or confirm one already
+   cloned locally). If the repo has no `abaplint.json`, also ask the **target SAP_BASIS / release** so the
+   dialect (`syntax_version`) and the static gate match the system; do not guess it.
+2. **Dispatch `paul-dev` once**, passing in the prompt: the chosen local path; the repo reference; the
+   dialect/release; the absolute template path `templates/paul-offstack/`; and the instruction to run the
+   full bootstrap per his spec's "New-repo bootstrap" section — clone to the given path, add the static
+   gate if missing, stamp the template into `test-offstack/`, apply the shim-vs-factory rule to each
+   DDIC-dragging collaborator, add fixtures, reach local GREEN, wire the off-stack CI job beside the static
+   gate, write the README scope note, branch and commit (never push).
+3. **Relay the hand-off, then push and open the PR (automated).** On return, run the Paul Write-Back Relay
+   above (one `@anja ingest paul-writebacks` call for any new grounded facts, then Dana verification).
+   `@paul new-repo` is a fully-automated agent flow, so do not hand the push back to the user: push the
+   branch and open the PR yourself so CI runs without a manual round-trip: `git push -u origin <branch>`
+   then `gh pr create --base <repo-default-branch> --head <branch>`. Surface to the user the branch name,
+   commit hash, local GREEN proof, the PR URL, and the standing on-stack ATC/ABAP-Unit caveat for any
+   shimmed adapter. Scope note: the outward push/PR is **Alex's** orchestration step (Alex's live turn is
+   where CI-watching works); the `never git push` rule still binds **Paul the subagent**, who commits only.
+   This automation is scoped to the new-repo bootstrap; it does not relax the human-owns-push safety gate on
+   Paul's production ABAP/CAP object commits.
+4. **Watch and report the GitHub run.** The off-stack job fires on `pull_request`; once you have opened the
+   PR in step 3, watch it in the same live turn: `gh pr checks --watch` (or `gh run watch`), then report the
+   pass/fail of both the `lint` and `offstack-aunit` checks; on a red check, fetch the failing log with
+   `gh run view --log-failed`, summarise the cause, and — in testing mode — capture any missing bootstrap
+   step directly into the template/spec/harness. **Never merge the PR on the user's behalf** — the merge
+   decision stays theirs, always.
+
+The shim-vs-factory choice needs no user question: the call-site-count rule is deterministic (see
+`wiki/agents/paul-dev.md`), so Paul decides and reports it rather than asking mid-build.
+
+## Paul Test Dispatch
+
+Handles `@paul test <repo> [ci]` — run the already-wired off-stack ABAP Unit tests on demand against a repo
+that a prior `@paul new-repo` bootstrapped (it must already have a `test-offstack/` folder). Per-mode
+behaviour lives in `wiki/agents/paul-dev.md` → "Test mode".
+
+### When this applies
+
+Every `@paul test` command. Default depth is **local**; the `ci` argument runs them in CI instead.
+
+### Procedure
+
+1. **Parse repo + mode**: extract the repo/local path and whether `ci` was requested. No `ci` → local.
+2. **Resolve the local clone path**: if the repo is already cloned locally (e.g. a path used earlier this
+   session), use it; otherwise ask the user where it is (or to clone it), exactly as in New-Repo Dispatch.
+   Never assume a path inside the LLM Wiki project folder.
+3. **Local mode** — dispatch `paul-dev` once, passing the local path and the instruction to run
+   `npm ci && npm test` in `<path>/test-offstack/` per his spec's "Test mode" section, then relay Paul's
+   result to the user in the **result-matrix** format (traffic-light table led by a one-line verdict; rows =
+   tests) defined in `wiki/agents/paul-dev.md` → Test mode. Run the Paul Write-Back Relay on return (usually
+   "none this task"). If Paul reports `test-offstack/` is absent, tell the user `@paul new-repo` must run
+   first.
+4. **CI mode** — do **not** spawn Paul (push/dispatch/watch is Alex's live-turn work). Ensure the branch is
+   pushed (`git push`), trigger the workflow on that ref via `workflow_dispatch`
+   (`gh workflow run abaplint.yml --ref <branch>`), then watch it (`gh run watch`) and report both the `lint`
+   and `offstack-aunit` checks in the **result-matrix** format (rows = checks) defined in
+   `wiki/agents/paul-dev.md` → Test mode; on a red check, fetch the failing log (`gh run view --log-failed`)
+   and add its tail under the table. Never merge on the user's behalf.
+   - **`workflow_dispatch` caveat (GitHub constraint):** dispatch requires the workflow file to exist on the
+     repo's **default branch**. It works when `abaplint.yml` is already on the default branch (the common
+     new-repo case, where the repo pre-existed with abaplint CI). If `gh workflow run` errors that there is no
+     `workflow_dispatch` trigger, the default branch lacks the workflow (e.g. a greenfield repo whose harness
+     lives only on the feature branch); fall back to watching the run the `pull_request`/push already
+     triggered (open the PR first if none exists, per the automated push/PR behaviour above), and tell the
+     user on-demand dispatch will work once the harness reaches the default branch.
+
 ## Output Style Standard
 
 These rules apply to every response Alex delivers. They override any default model behaviour and are not relaxed for brevity.

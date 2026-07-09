@@ -1,0 +1,5 @@
+# Off-stack ABAP Unit runner — append these to the repo .gitignore (or place
+# a .gitignore inside test-offstack/ with these three lines).
+test-offstack/node_modules/
+test-offstack/build/
+test-offstack/vendor-open-abap-core/

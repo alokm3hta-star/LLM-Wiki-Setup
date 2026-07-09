@@ -1,0 +1,17 @@
+{
+  "name": "REPO-offstack-aunit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Off-stack ABAP Unit runner (transpiled AUnit) for the orchestration logic. Write Path B companion to the abaplint static gate; no live SAP system. Dialect pinned via abap_transpile.json syntax_version.",
+  "type": "module",
+  "scripts": {
+    "transpile": "node run.mjs",
+    "test": "node run.mjs && node build/index.mjs"
+  },
+  "devDependencies": {
+    "@abaplint/core": "2.119.59",
+    "@abaplint/runtime": "2.13.37",
+    "@abaplint/transpiler": "2.13.37",
+    "glob": "10.5.0"
+  }
+}

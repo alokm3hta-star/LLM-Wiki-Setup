@@ -26,7 +26,8 @@ SUMMARY_RE = re.compile(r"^\*\*Summary\*\*:\s*(.+)$", re.MULTILINE)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 
 SOURCE_PREFIXES = ("btp-book-", "btp-docs-", "sap-build-", "wz-std-", "islm-",
-                   "bi-", "adt-", "press-ilm-", "ilm-", "cloud-alm-", "abap-oop-")
+                   "bi-", "adt-", "press-ilm-", "ilm-", "cloud-alm-", "abap-oop-",
+                   "abap-off-stack-")
 STOP = {
     "the", "and", "for", "with", "from", "this", "that", "are", "via", "into",
     "sap", "use", "used", "uses", "using", "can", "all", "per", "its", "etc",

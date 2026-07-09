@@ -1,0 +1,41 @@
+# Off-stack ABAP Unit job — add this job to the repo's existing abaplint
+# workflow (.github/workflows/abaplint.yml), BESIDE the static `lint` job, not
+# replacing it. `needs: lint` runs static analysis first, then the off-stack
+# tests. The workflow must trigger on `pull_request` (and push to main) for CI
+# to run on PRs.
+#
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+#     workflow_dispatch:   # lets `@paul test <repo> ci` run the gate on demand for any branch
+
+  # Off-stack ABAP Unit: transpiles the ORCHESTRATION logic with the abaplint
+  # transpiler and runs the existing ABAP Unit tests on Node — no live SAP
+  # system. Write-Path-B companion to the static gate, NOT a replacement for
+  # on-stack ATC/ABAP Unit. Scope boundary: the shimmed adapter class(es) are
+  # NOT reproduced off-stack and stay an on-stack concern. See
+  # test-offstack/README.md.
+  offstack-aunit:
+    name: off-stack ABAP Unit (orchestration)
+    runs-on: ubuntu-latest
+    # Static analysis first, then off-stack unit tests.
+    needs: lint
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install off-stack toolchain
+        working-directory: test-offstack
+        run: npm ci
+
+      - name: Run off-stack ABAP Unit (transpiled, pinned dialect)
+        working-directory: test-offstack
+        # `npm test` = node run.mjs (clone open-abap-core @ pinned commit,
+        # transpile at the configured dialect, real adapter excluded + shim
+        # compiled) && node build/index.mjs (run the tests; non-zero exit on
+        # any assertion failure fails this job).
+        run: npm test

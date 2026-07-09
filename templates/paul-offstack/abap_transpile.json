@@ -1,0 +1,19 @@
+{
+  "__note": "Per-repo config for the off-stack runner. Fill the three judgement fields: syntax_version (match the repo-root abaplint.json), exclude_filter (regex for each real adapter class replaced by a shim), and confirm input_folder. Everything else is standard. Delete this __note key before committing.",
+  "syntax_version": "v816",
+  "input_folder": ["../src", "shim", "ddic"],
+  "input_filter": [],
+  "exclude_filter": ["/src/REPLACE_WITH_SHIMMED_ADAPTER\\.clas\\."],
+  "output_folder": "build",
+  "libs": [
+    { "folder": "/vendor-open-abap-core", "files": "/src/**" }
+  ],
+  "write_unit_tests": true,
+  "write_source_map": false,
+  "options": {
+    "ignoreSyntaxCheck": false,
+    "addFilenames": true,
+    "addCommonJS": true,
+    "unknownTypes": "compileError"
+  }
+}
